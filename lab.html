@@ -1,0 +1,623 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>LLM Mechanics Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab bench. Left = live 3D instrument + its knobs; right = the study sheet (model, predict, practice, recall). Stacks on phones. */
+:root{
+  --bg:#EDF0F3; --panel:#F8F9FB; --fg:#121821; --muted:#5A6576; --line:#D2D8E0;
+  --ink:#2C4CD0; --amber:#C46F1A; --teal:#147F6E; --rose:#BF3A62; --stage:#E2E7ED;
+  --display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0C0F14; --panel:#131820; --fg:#E4E8EF; --muted:#8E98AA; --line:#252C38;
+  --ink:#89A3FF; --amber:#F0A35A; --teal:#4DCAB2; --rose:#F27C9E; --stage:#0F141B; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0C0F14; --panel:#131820; --fg:#E4E8EF; --muted:#8E98AA; --line:#252C38;
+  --ink:#89A3FF; --amber:#F0A35A; --teal:#4DCAB2; --rose:#F27C9E; --stage:#0F141B; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:15px/1.55 var(--body);
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:18px 40px}
+.wrap{max-width:1280px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font:800 clamp(26px,4vw,38px)/1.05 var(--display);letter-spacing:-.02em;margin:0;text-wrap:balance}
+h1 em{font-style:normal;color:var(--ink)}
+.sub{color:var(--muted);margin:4px 0 0;max-width:60ch}
+.tabs{display:flex;gap:6px}
+.tab{font:600 13px var(--body);padding:8px 14px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--fg);cursor:pointer}
+.tab[aria-selected="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.tab .due{font-family:var(--mono);font-size:11px;margin-left:6px;padding:1px 6px;border-radius:999px;background:var(--amber);color:#fff}
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;scrollbar-width:thin}
+.chip{flex:0 0 auto;display:flex;align-items:center;gap:8px;padding:7px 12px 7px 8px;border:1px solid var(--line);border-radius:10px;background:var(--panel);color:var(--fg);cursor:pointer;font:600 13px var(--body)}
+.chip b{font:600 11px var(--mono);width:22px;height:22px;display:grid;place-items:center;border-radius:6px;background:var(--stage);color:var(--muted)}
+.chip[aria-current="true"]{border-color:var(--ink)}
+.chip[aria-current="true"] b{background:var(--ink);color:var(--bg)}
+.chip .tick{color:var(--teal);font-size:12px}
+button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible,.chip:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.lab{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:900px){.lab{grid-template-columns:minmax(0,1fr)}}
+.bench{display:flex;flex-direction:column;gap:10px;min-width:0}
+@media (min-width:901px){.bench{position:sticky;top:max(12px,env(safe-area-inset-top,0px))}}
+#stage{position:relative;width:100%;height:clamp(300px,52vh,560px);border-radius:14px;overflow:hidden;border:1px solid var(--line);
+  background-color:var(--stage);
+  background-image:linear-gradient(color-mix(in srgb,var(--line) 55%,transparent) 1px,transparent 1px),linear-gradient(90deg,color-mix(in srgb,var(--line) 55%,transparent) 1px,transparent 1px);
+  background-size:28px 28px;touch-action:none}
+#stage canvas{display:block}
+.labels{position:absolute;inset:0;pointer-events:none}
+.lbl{font:600 11px var(--mono);color:var(--fg);background:color-mix(in srgb,var(--panel) 82%,transparent);padding:1px 5px;border-radius:4px;white-space:nowrap;pointer-events:none}
+.lbl.dim{color:var(--muted);font-weight:400;background:transparent}
+.lbl.hot{color:var(--bg);background:var(--ink)}
+.lbl.rot{background:transparent}
+.lbl.rot span{display:inline-block;transform:translate(-30%,30%) rotate(-45deg);background:color-mix(in srgb,var(--panel) 82%,transparent);padding:1px 4px;border-radius:3px}
+.hint{position:absolute;top:10px;right:12px;font:11px var(--mono);color:var(--muted);pointer-events:none}
+.stagetitle{position:absolute;top:10px;left:12px;font:600 11px var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);pointer-events:none}
+#readout{font:12.5px/1.6 var(--mono);background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:10px 12px;min-height:44px;font-variant-numeric:tabular-nums;overflow-x:auto}
+#readout b{color:var(--ink)}
+#readout .warn{color:var(--rose);font-weight:600}
+#readout .ok{color:var(--teal);font-weight:600}
+#controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:12px 18px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
+.ctl{display:flex;flex-direction:column;gap:4px;font-size:13px;min-width:0}
+.ctl-top{display:flex;justify-content:space-between;gap:8px;color:var(--muted)}
+.ctl-top output{font:600 12px var(--mono);color:var(--fg)}
+input[type=range]{width:100%;accent-color:var(--ink)}
+select{font:13px var(--body);padding:6px 8px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);width:100%}
+.btnrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;grid-column:1/-1}
+.btn{font:600 13px var(--body);padding:7px 14px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);cursor:pointer}
+.btn.primary{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.btn:disabled{opacity:.45;cursor:default}
+.check{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--fg)}
+.check input{accent-color:var(--ink);width:16px;height:16px}
+.small{font-size:12px;color:var(--muted)}
+canvas.spark{width:100%;height:70px;display:block;grid-column:1/-1;border-top:1px dashed var(--line)}
+/* study sheet */
+.sheet{display:flex;flex-direction:column;gap:14px;min-width:0}
+.sheet h2{font:800 28px/1.1 var(--display);letter-spacing:-.015em;margin:0;text-wrap:balance}
+.eyebrow{font:600 11px var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.model{border-left:3px solid var(--ink);padding:2px 0 2px 14px;font-size:16.5px;line-height:1.5;max-width:62ch}
+.block{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.block h3{font:700 15px var(--display);margin:0;display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.block h3 .eyebrow{font-weight:400}
+.block p{margin:0;max-width:65ch}
+.answer{border-top:1px dashed var(--line);padding-top:10px;color:var(--fg)}
+.exp{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.exp li{display:grid;grid-template-columns:20px minmax(0,1fr);gap:10px;align-items:start}
+.exp input{margin-top:3px;accent-color:var(--teal);width:16px;height:16px}
+.exp li.done span{color:var(--muted);text-decoration:line-through;text-decoration-color:var(--teal)}
+textarea{width:100%;min-height:92px;font:14px/1.5 var(--body);padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg);resize:vertical}
+.formula{font:13px var(--mono);background:var(--stage);padding:8px 10px;border-radius:8px;overflow-x:auto;white-space:nowrap}
+/* review */
+.review{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:900px){.review{grid-template-columns:minmax(0,1fr)}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;min-height:260px;display:flex;flex-direction:column;gap:14px}
+.card .q{font:700 21px/1.3 var(--display);text-wrap:balance}
+.card .a{font-size:16px;border-top:1px dashed var(--line);padding-top:14px;max-width:62ch}
+.grade{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto}
+.grade .btn small{display:block;font:400 11px var(--mono);color:var(--muted)}
+.grade .again{border-color:var(--rose)}
+.grade .good{border-color:var(--teal)}
+.grade .easy{border-color:var(--ink)}
+.boxes{display:flex;flex-direction:column;gap:10px}
+.boxrow{display:grid;grid-template-columns:minmax(0,1fr) 120px 44px;gap:10px;align-items:center;font-size:13px}
+.bar{height:8px;border-radius:4px;background:var(--stage);overflow:hidden;display:flex}
+.bar i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font:11px var(--mono);color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+.mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+.fail{display:grid;place-items:center;height:100%;padding:20px;text-align:center;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{scroll-behavior:auto!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>LLM <em>Mechanics</em> Lab</h1>
+      <p class="sub">Six working models of how language models compute and how fine-tuning changes them. Predict, then poke the 3D model, then prove you remember.</p>
+    </div>
+    <div class="tabs" role="tablist">
+      <button class="tab" id="tabLab" role="tab" aria-selected="true">Lab</button>
+      <button class="tab" id="tabReview" role="tab" aria-selected="false">Review<span class="due" id="dueCount">0</span></button>
+    </div>
+  </header>
+
+  <section id="labView">
+    <nav class="chips" id="chips" aria-label="Modules"></nav>
+    <div class="lab" style="margin-top:12px">
+      <div class="bench">
+        <div id="stage"><span class="stagetitle" id="stageTitle"></span><span class="hint">drag to orbit · pinch or scroll to zoom</span></div>
+        <div id="readout"></div>
+        <div id="controls"></div>
+      </div>
+      <article class="sheet" id="sheet"></article>
+    </div>
+  </section>
+
+  <section id="reviewView" hidden>
+    <div class="review">
+      <div class="card" id="card"></div>
+      <div class="block">
+        <h3>Retention by module <span class="eyebrow">Leitner boxes</span></h3>
+        <div class="boxes" id="boxes"></div>
+        <div class="legend"><span><i style="background:var(--rose)"></i>learning</span><span><i style="background:var(--amber)"></i>young (≤7d)</span><span><i style="background:var(--teal)"></i>mature (16d+)</span></div>
+        <p class="small">Cards from a module join the deck the first time you open it. Intervals: 1, 3, 7, 16, 35, 80 days. "Again" sends a card back to day one.</p>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
+<script>
+(function(){
+const $=s=>document.querySelector(s);
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const C=n=>new THREE.Color(css(n)||'#888');
+let store={};try{store=JSON.parse(localStorage.getItem('llmlab.v1')||'{}')}catch(e){}
+store.cards=store.cards||{};store.exp=store.exp||{};store.pred=store.pred||{};store.teach=store.teach||{};store.visited=store.visited||{};
+function save(){try{localStorage.setItem('llmlab.v1',JSON.stringify(store))}catch(e){}}
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+let seed=7;const rnd=()=>{seed=(seed*16807)%2147483647;return (seed-1)/2147483646};
+const randn=()=>{let u=0,v=0;while(!u)u=Math.random();v=Math.random();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)};
+
+/* ---------------- study content ---------------- */
+const L={
+embeddings:{n:1,title:'Embeddings',short:'Embeddings',
+ model:'Every token is a point in a high-dimensional space. Meaning lives in direction: related tokens point the same way, and a relationship is a reusable offset between points.',
+ formula:'cos(a,b) = a·b / (‖a‖‖b‖)',
+ predict:['If you compute king − man + woman, where will the result land? Why should vector arithmetic know anything about royalty?','Next to queen. The man→woman offset is nearly the same vector as king→queen, because training put "gender" along a consistent direction. Real models use thousands of dimensions and analogies are noisier than this 3-D toy, but the geometry is the same idea.'],
+ exp:['Tap "option". Are its three nearest neighbours financial or royal? Read the cosine scores: roughly what value separates related from unrelated here?','Switch to Analogy and run boy − man + woman. Which offset is being reused, and does it land on girl?','Run king − man + apple. The answer is meaningless. Explain why the gender offset has no fruit-shaped analogue.'],
+ teach:'Explain to a colleague why a vector database can find "similar" documents without any keyword overlap.',
+ cards:[['What does cosine similarity measure, and why use it for embeddings instead of Euclidean distance?','The angle between two vectors, ignoring their length. Length often tracks frequency or norm effects rather than meaning, so direction is the cleaner similarity signal.'],
+  ['Where do token embeddings come from?','A learned lookup table of shape (vocab size × d_model), trained by backprop together with the rest of the network. Row i is the vector for token i.'],
+  ['Why does king − man + woman ≈ queen?','Relations are encoded as roughly constant offset directions. The man→woman offset, added to king, lands near queen.'],
+  ['What does a vector database do at query time?','Embeds the query, then runs approximate nearest-neighbour search (cosine or inner product) over stored vectors, typically with an index such as HNSW or IVF.']]},
+attention:{n:2,title:'Self-attention',short:'Attention',
+ model:'Each token broadcasts a query ("what am I looking for?"). Earlier tokens offer keys ("what do I contain?"). Query·key scores pass through softmax, and the weights decide how much of each token\'s value flows into this one.',
+ formula:'Attention(Q,K,V) = softmax(QKᵀ / √dₖ + mask) · V',
+ predict:['In "The trader sold the option because it expired", which word should "it" attend to most? What happens to that pattern when temperature rises?','"option". As temperature rises the softmax flattens and "it" spreads its attention over every earlier word, so the reference blurs. As it falls toward 0, attention becomes one-hot on the single best match.'],
+ exp:['Set the query to "it". Drag temperature to 0.2, then to 3.0. Which setting keeps the coreference sharp?','Turn off the causal mask. Which future word does "it" start attending to? Why would that be cheating during training of a decoder?','Look along any row of the bar grid. Why does each row always sum to exactly 1?'],
+ teach:'Explain why attention costs O(n²) in sequence length and what a KV cache saves during generation.',
+ cards:[['Write the scaled dot-product attention formula.','softmax(QKᵀ/√dₖ)·V, plus a mask added before the softmax.'],
+  ['Why divide by √dₖ?','Dot products grow with dimension. Without scaling, scores get large, softmax saturates to one-hot and gradients vanish.'],
+  ['What does the causal mask do?','Sets scores for future positions to −∞ before softmax, so token i only sees tokens ≤ i. Training then matches generation, where the future is unknown.'],
+  ['Why multiple heads?','Each head runs attention in its own lower-dimensional subspace and can learn a different relation (syntax, coreference, position). Outputs are concatenated and projected.'],
+  ['What is the KV cache?','During generation, keys and values of past tokens are stored so each new token computes only its own Q, K, V. It trades memory for avoiding recomputation.']]},
+sampling:{n:3,title:'Decoding & sampling',short:'Sampling',
+ model:'The network outputs one score (logit) per vocabulary token. Decoding is a separate policy on top: temperature reshapes the distribution, top-k and top-p cut off the tail, then one token is drawn.',
+ formula:'pᵢ = exp(zᵢ / T) / Σⱼ exp(zⱼ / T)',
+ predict:['At temperature 0.1, roughly what share of samples will be "fell"? With top-p = 0.9 at T = 1, can "purple" ever appear?','Close to 100%: low temperature approaches greedy decoding. "purple" can never appear, because nucleus sampling keeps only the smallest set of tokens whose probability adds to 0.9, and the far tail is outside it.'],
+ exp:['Sample 100 at T = 1.0, then at T = 1.8 with no truncation. Count how often a wrong-direction word (rose, rallied, sang) shows up.','Set top-k = 3, then raise T to 2. Why is high temperature much safer once the tail is cut?','Find the smallest top-p that leaves exactly two candidates.'],
+ teach:'Explain why a trading agent that must output a valid JSON order should use low temperature, and what you lose by doing so.',
+ cards:[['How does temperature change the distribution?','Divides logits by T before softmax. T<1 sharpens toward the top token; T>1 flattens toward uniform; T→0 is greedy.'],
+  ['Top-k vs top-p?','Top-k keeps a fixed number of highest-probability tokens. Top-p (nucleus) keeps the smallest set whose cumulative probability ≥ p, so its size adapts to how confident the model is.'],
+  ['What is a logit?','The raw, unnormalised score for a token. Softmax turns logits into probabilities; only differences between logits matter.'],
+  ['What does entropy of the next-token distribution tell you?','How uncertain the model is. 2^H (in bits) is the effective number of equally likely choices.']]},
+descent:{n:4,title:'Gradient descent',short:'Descent',
+ model:'Training is a ball rolling downhill on a loss surface defined by the data. Learning rate is step size, momentum is inertia, and mini-batch noise shakes the ball. Fine-tuning starts the ball near a good spot and tries not to knock it far away.',
+ formula:'v ← μ·v − η·∇L(θ),   θ ← θ + v',
+ predict:['Drop the ball near the deep valley with learning rate 2.0. Will it settle?','No. Each step overshoots the valley\'s width, so it bounces across or flies out. A learning rate that is too high shows up as spiking loss, not slow progress.'],
+ exp:['Tap inside the shallow left basin and run with momentum 0. Then reset and run with momentum 0.9. Does inertia carry it into the deeper valley?','Find the largest learning rate that still converges in the deep valley. Note the loss curve right before it breaks.','Add batch noise around 0.6 in the shallow basin. Why can noise help, and why do we decay the learning rate late in training?'],
+ teach:'Explain why fine-tuning uses a learning rate 10–100× smaller than pre-training.',
+ cards:[['What does the gradient tell you?','The direction of steepest increase of the loss. Stepping against it decreases loss locally.'],
+  ['Symptoms of a learning rate that is too high vs too low?','Too high: loss spikes, oscillates or goes NaN. Too low: loss falls very slowly and training stalls in the nearest basin.'],
+  ['What does momentum do?','Accumulates a velocity from past gradients, smoothing noise and carrying the parameters through flat regions and small bumps.'],
+  ['Why a small learning rate for fine-tuning?','The pretrained weights already sit in a good region. Big steps move far from it and erase general abilities (catastrophic forgetting).'],
+  ['What is learning-rate warmup?','Ramping the learning rate up from near zero over the first steps, so early large, noisy gradients (and unreliable Adam statistics) don\'t throw the weights off.']]},
+lora:{n:5,title:'LoRA adapters',short:'LoRA',
+ model:'Freeze the big weight matrix W. Learn only a skinny update ΔW = B·A with rank r. Fine-tuning updates mostly live in a low-dimensional subspace, so a small r captures them at a fraction of the parameters.',
+ formula:'h = W₀x + (α/r)·B·A·x,   B ∈ ℝ^(d×r), A ∈ ℝ^(r×d)',
+ predict:['The target update in this scene has three strong directions plus noise. What reconstruction error do you expect at r = 1, r = 3 and r = 8?','High at r = 1, small at r = 3, and only slightly better at r = 8. Past the intrinsic rank of the update, extra rank mostly fits noise.'],
+ exp:['Press Train at r = 4 and watch the B slab on the left. Why is ΔW exactly zero at step 0?','Sweep r from 1 to 8 and write down the error at each. Where is the knee?','Tap any cell of the floating ΔW grid. See which row of B and which column of A combine to make it. Then toggle Merge: why does a merged adapter add no inference latency?'],
+ teach:'Explain to your past self why QLoRA lets you fine-tune a 7B model on a single consumer GPU.',
+ cards:[['How many trainable parameters does LoRA add for a d×d matrix at rank r?','2·d·r instead of d². At d = 4096, r = 8 that is 65,536 vs 16.8M (about 0.4%).'],
+  ['Why is B initialised to zero?','So ΔW = BA = 0 at the start: the model begins exactly equal to the base model and training departs from it smoothly.'],
+  ['What does merging a LoRA adapter mean?','Computing W = W₀ + (α/r)BA once and storing it. Inference then uses a single matrix, with no extra latency.'],
+  ['What is QLoRA?','The frozen base weights are quantised to 4-bit (NF4); LoRA adapters are trained in higher precision on top. Memory drops roughly 4× with little quality loss.'],
+  ['Which layers usually get LoRA adapters?','Originally the attention q and v projections; applying it to all linear layers (q, k, v, o and the MLP) usually works better.']]},
+preference:{n:6,title:'Preference tuning',short:'Preference',
+ model:'SFT copies demonstrations. Preference tuning (RLHF, DPO) shifts probability toward chosen answers and away from rejected ones, while a KL leash with strength β keeps the policy close to the reference model so it stays fluent and broad.',
+ formula:'π*(y) ∝ π_ref(y) · exp( r(y) / β )',
+ predict:['Turn on the reward bug, a narrow spike the reward model scores highly by mistake. At β = 0.1, where will the policy end up? At β = 2?','At β = 0.1 the policy piles onto the spike: reward hacking. At β = 2 the leash holds it near the reference, so it gains some real reward and ignores the tiny region where the bug lives. β trades reward against drift.'],
+ exp:['With the bug off, sweep β from 5 down to 0.05 at full training. Watch KL rise. Below what β does extra reward stop being worth the drift?','Switch to SFT mode and turn the reward bug on. Why is SFT immune to it, and what does SFT give up by never seeing rejected answers?','At β = 0.05 note how narrow the policy peak becomes. Connect this to "mode collapse" and less diverse answers after RLHF.'],
+ teach:'Explain how DPO gets the same optimum as RLHF without training a separate reward model.',
+ cards:[['What is the optimal policy for the KL-regularised RLHF objective?','π*(y) ∝ π_ref(y)·exp(r(y)/β). The reference is reweighted by exponentiated reward; β controls how strong the reweighting is.'],
+  ['What does DPO do differently from PPO-based RLHF?','It rearranges the optimal-policy equation so the reward is implicit in log π/π_ref, then trains directly on (chosen, rejected) pairs with a classification-style loss. No reward model, no RL sampling loop.'],
+  ['What is reward hacking?','The policy exploits flaws in the reward model, scoring high on the proxy while getting worse on the real goal. A strong KL penalty limits it.'],
+  ['What is catastrophic forgetting?','Fine-tuning on a narrow task degrades earlier capabilities because the weights move far from the pretrained solution.'],
+  ['SFT vs preference tuning in one line each?','SFT: maximise likelihood of good demonstrations. Preference tuning: learn from comparisons, raising chosen over rejected while staying near the reference.']]}
+};
+const ORDER=['embeddings','attention','sampling','descent','lora','preference'];
+
+/* ---------------- three setup ---------------- */
+const stageEl=$('#stage'),uiEl=$('#controls'),readEl=$('#readout');
+let renderer,labelR,camera,controls,ok=true;
+try{
+  renderer=new THREE.WebGLRenderer({antialias:true,alpha:true});
+  renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+  renderer.setClearColor(0x000000,0);
+  stageEl.appendChild(renderer.domElement);
+  labelR=new THREE.CSS2DRenderer();labelR.domElement.className='labels';stageEl.appendChild(labelR.domElement);
+  camera=new THREE.PerspectiveCamera(45,1,0.1,200);
+  controls=new THREE.OrbitControls(camera,renderer.domElement);
+  controls.enableDamping=true;controls.dampingFactor=.08;controls.maxDistance=40;controls.minDistance=2;
+}catch(e){ok=false;stageEl.innerHTML='<div class="fail">WebGL is unavailable in this browser, so the 3D models cannot render. The study sheet and review deck still work.</div>';}
+function resize(){if(!ok)return;const w=stageEl.clientWidth,h=stageEl.clientHeight;renderer.setSize(w,h);labelR.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();}
+if(ok){new ResizeObserver(resize).observe(stageEl);resize();}
+
+function baseScene(){const s=new THREE.Scene();s.add(new THREE.HemisphereLight(0xffffff,0x556070,0.8));const d=new THREE.DirectionalLight(0xffffff,0.75);d.position.set(5,10,7);s.add(d);return s;}
+function mkLabel(text,cls,html){const el=document.createElement('div');el.className='lbl'+(cls?' '+cls:'');if(html)el.innerHTML=html;else el.textContent=text;const o=new THREE.CSS2DObject(el);return o;}
+function disposeObj(root){root.traverse(o=>{if(o.geometry)o.geometry.dispose();if(o.material)(Array.isArray(o.material)?o.material:[o.material]).forEach(m=>m.dispose());});}
+function clearGroup(g){while(g.children.length){const c=g.children[g.children.length-1];g.remove(c);disposeObj(c);}}
+function arrow(from,to,color,head){const d=new THREE.Vector3().subVectors(to,from);const len=d.length();if(len<1e-4)return new THREE.Group();const a=new THREE.ArrowHelper(d.normalize(),from,len,color,head||Math.min(.3,len*.3),(head||Math.min(.3,len*.3))*.55);return a;}
+function line(pts,color,opacity){const g=new THREE.BufferGeometry().setFromPoints(pts);return new THREE.Line(g,new THREE.LineBasicMaterial({color,transparent:opacity<1,opacity:opacity==null?1:opacity}));}
+function gridGeom(N,half){const g=new THREE.BufferGeometry();const pos=new Float32Array((N+1)*(N+1)*3);const col=new Float32Array(pos.length);const idx=[];
+  for(let i=0;i<=N;i++)for(let j=0;j<=N;j++){const k=i*(N+1)+j;pos[k*3]=-half+2*half*j/N;pos[k*3+2]=-half+2*half*i/N;}
+  for(let i=0;i<N;i++)for(let j=0;j<N;j++){const a=i*(N+1)+j,b=a+1,c=a+N+1,d=c+1;idx.push(a,c,b,b,c,d);}
+  g.setIndex(idx);g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setAttribute('color',new THREE.BufferAttribute(col,3));return g;}
+
+/* ---------------- UI helpers ---------------- */
+let curKey='';
+function slider(o){const id=`${curKey}_${o.key}`;const w=document.createElement('label');w.className='ctl';w.htmlFor=id;
+  w.innerHTML=`<span class="ctl-top"><span>${o.label}</span><output></output></span><input type="range" id="${id}" min="${o.min}" max="${o.max}" step="${o.step}" value="${o.value}">`;
+  const inp=w.querySelector('input'),out=w.querySelector('output');const f=v=>o.fmt?o.fmt(v):v;
+  const upd=()=>{const v=+inp.value;out.textContent=f(v);o.on(v);};inp.addEventListener('input',upd);out.textContent=f(o.value);
+  (o.parent||uiEl).appendChild(w);return {el:w,inp,set(v){inp.value=v;upd();},get v(){return +inp.value}};}
+function select(o){const id=`${curKey}_${o.key}`;const w=document.createElement('label');w.className='ctl';w.htmlFor=id;
+  w.innerHTML=`<span class="ctl-top"><span>${o.label}</span></span><select id="${id}">${o.options.map(v=>`<option value="${v}"${v===o.value?' selected':''}>${v}</option>`).join('')}</select>`;
+  const s=w.querySelector('select');s.addEventListener('change',()=>o.on(s.value));(o.parent||uiEl).appendChild(w);return {el:w,sel:s,set(v){s.value=v;o.on(v);}};}
+function row(){const d=document.createElement('div');d.className='btnrow';uiEl.appendChild(d);return d;}
+function btn(parent,text,on,primary){const b=document.createElement('button');b.className='btn'+(primary?' primary':'');b.type='button';b.textContent=text;b.addEventListener('click',on);parent.appendChild(b);return b;}
+function toggle(parent,o){const id=`${curKey}_${o.key}`;const w=document.createElement('label');w.className='check';w.htmlFor=id;w.innerHTML=`<input type="checkbox" id="${id}"${o.value?' checked':''}><span>${o.label}</span>`;const i=w.querySelector('input');i.addEventListener('change',()=>o.on(i.checked));parent.appendChild(w);return i;}
+const fx2=v=>v.toFixed(2);
+
+/* ---------------- module scenes ---------------- */
+const MOD={};
+
+/* 1. Embeddings */
+MOD.embeddings=function(m){
+  const s=m.scene;camera.position.set(6.5,4.2,7.5);controls.target.set(0,0,0);
+  const W={king:[2.2,1.2,.6,'royal'],queen:[2.2,-1.2,.6,'royal'],prince:[1.6,1.2,-.8,'royal'],princess:[1.6,-1.2,-.8,'royal'],
+    man:[.3,1.2,.2,'people'],woman:[.35,-1.15,.25,'people'],boy:[.2,1.1,-1.3,'people'],girl:[.25,-1.1,-1.25,'people'],
+    apple:[-2.4,.1,2.2,'fruit'],mango:[-2.7,-.3,2.6,'fruit'],banana:[-2.1,.4,2.7,'fruit'],
+    stock:[-1.8,.2,-2.6,'finance'],bond:[-2.3,-.2,-2.2,'finance'],option:[-1.6,.5,-2.0,'finance'],volatility:[-2.0,.9,-2.8,'finance']};
+  const gc={royal:'--ink',people:'--teal',fruit:'--amber',finance:'--rose'};
+  const names=Object.keys(W);const V=n=>new THREE.Vector3(W[n][0],W[n][1],W[n][2]);
+  const g=new THREE.GridHelper(8,16,C('--line'),C('--line'));g.position.y=-2;s.add(g);
+  const o=new THREE.Mesh(new THREE.SphereGeometry(.07,12,12),new THREE.MeshBasicMaterial({color:C('--muted')}));s.add(o);
+  const ol=mkLabel('origin','dim');ol.position.set(0,-.3,0);s.add(ol);
+  const mesh={};
+  names.forEach(n=>{const p=V(n);const me=new THREE.Mesh(new THREE.SphereGeometry(.15,20,20),new THREE.MeshStandardMaterial({color:C(gc[W[n][3]]),roughness:.45}));
+    me.position.copy(p);me.userData.name=n;s.add(me);mesh[n]=me;m.pick.push(me);
+    const l=mkLabel(n);l.position.set(p.x,p.y+.32,p.z);s.add(l);
+    s.add(line([p,new THREE.Vector3(p.x,-2,p.z)],C('--muted'),.25));});
+  const fx=new THREE.Group();s.add(fx);
+  const cos=(a,b)=>a.dot(b)/(a.length()*b.length());
+  let mode='Neighbours',q='option',A='king',B='man',Cc='woman';
+  function update(){clearGroup(fx);names.forEach(n=>mesh[n].scale.setScalar(1));
+    if(mode==='Neighbours'){const qv=V(q);const r=names.filter(n=>n!==q).map(n=>[n,cos(qv,V(n))]).sort((a,b)=>b[1]-a[1]);
+      fx.add(arrow(new THREE.Vector3(),qv,C('--ink'),.3));mesh[q].scale.setScalar(1.5);
+      r.slice(0,3).forEach(([n])=>{fx.add(arrow(new THREE.Vector3(),V(n),C('--teal'),.22));mesh[n].scale.setScalar(1.25);});
+      const far=r[r.length-1];
+      readEl.innerHTML=`Nearest to <b>${q}</b> by cosine: ${r.slice(0,3).map(([n,c])=>`${n} <b>${fx2(c)}</b>`).join(' · ')}<br>Least similar: ${far[0]} ${fx2(far[1])}`;
+    }else{const a=V(A),b=V(B),c=V(Cc);const res=a.clone().sub(b).add(c);
+      fx.add(arrow(b,c,C('--amber'),.25));fx.add(arrow(a,res,C('--amber'),.25));
+      fx.add(line([b,a],C('--muted'),.5));fx.add(line([c,res],C('--muted'),.5));
+      const ring=new THREE.Mesh(new THREE.SphereGeometry(.28,16,12),new THREE.MeshBasicMaterial({color:C('--amber'),wireframe:true}));ring.position.copy(res);fx.add(ring);
+      const r=names.filter(n=>![A,B,Cc].includes(n)).map(n=>[n,cos(res,V(n))]).sort((x,y)=>y[1]-x[1]);
+      mesh[r[0][0]].scale.setScalar(1.5);
+      readEl.innerHTML=`${A} − ${B} + ${Cc} → nearest: <b>${r[0][0]}</b> (cos ${fx2(r[0][1])}) · runner-up ${r[1][0]} ${fx2(r[1][1])}<br>The amber arrows are the same offset vector (${B}→${Cc}), reused at ${A}.`;}}
+  const ms=select({key:'mode',label:'Mode',options:['Neighbours','Analogy'],value:mode,on:v=>{mode=v;qs.el.hidden=v!=='Neighbours';[as,bs,cs].forEach(x=>x.el.hidden=v==='Neighbours');update();}});
+  const qs=select({key:'q',label:'Query word (or tap a sphere)',options:names,value:q,on:v=>{q=v;update();}});
+  const as=select({key:'a',label:'A',options:names,value:A,on:v=>{A=v;update();}});
+  const bs=select({key:'b',label:'− B',options:names,value:B,on:v=>{B=v;update();}});
+  const cs=select({key:'c',label:'+ C',options:names,value:Cc,on:v=>{Cc=v;update();}});
+  [as,bs,cs].forEach(x=>x.el.hidden=true);
+  m.onPick=h=>{const n=h.object.userData.name;if(!n)return;if(mode==='Neighbours')qs.set(n);else as.set(n);};
+  update();
+};
+
+/* 2. Attention */
+MOD.attention=function(m){
+  const s=m.scene;camera.position.set(0,7.5,9.5);controls.target.set(0,0,2.6);
+  const T=['The','trader','sold','the','option','because','it','expired'];const n=T.length;
+  const S=[];for(let i=0;i<n;i++){S.push([]);for(let j=0;j<n;j++)S[i].push(.25*Math.sin(i*1.7+j*2.3)+.1);S[i][i]=1.0;}
+  const set=(i,j,v)=>S[i][j]=v;set(1,0,1.3);set(2,1,2.4);set(3,2,.9);set(4,3,1.8);set(4,2,1.3);set(5,2,1.7);set(5,4,1.2);
+  set(6,4,3.1);set(6,1,1.7);set(7,6,2.2);set(7,4,2.0);set(6,7,3.4);set(2,4,2.6);set(1,2,2.2);
+  const X=i=>(i-(n-1)/2)*1.25;
+  const boxes=[];T.forEach((t,i)=>{const b=new THREE.Mesh(new THREE.BoxGeometry(.8,.4,.5),new THREE.MeshStandardMaterial({color:C('--muted'),roughness:.6}));
+    b.position.set(X(i),0,0);b.userData.q=i;s.add(b);boxes.push(b);m.pick.push(b);const l=mkLabel(t);l.position.set(X(i),-.45,0);s.add(l);});
+  const Z=i=>1.6+i*.6;const bars=[];
+  const fl=new THREE.Mesh(new THREE.PlaneGeometry(n*1.25+.4,n*.6+.3),new THREE.MeshBasicMaterial({color:C('--line'),transparent:true,opacity:.5,side:THREE.DoubleSide}));
+  fl.rotation.x=-Math.PI/2;fl.position.set(0,-.01,Z((n-1)/2));s.add(fl);
+  for(let i=0;i<n;i++){bars.push([]);const rl=mkLabel(T[i],'dim');rl.position.set(X(0)-1.05,0,Z(i));s.add(rl);
+    for(let j=0;j<n;j++){const b=new THREE.Mesh(new THREE.BoxGeometry(.5,1,.42),new THREE.MeshStandardMaterial({color:C('--muted'),transparent:true,roughness:.5}));
+      b.position.set(X(j),0,Z(i));b.userData.q=i;s.add(b);bars[i].push(b);m.pick.push(b);}}
+  const kl=mkLabel('rows = query · columns = key','dim');kl.position.set(0,0,Z(n-1)+.75);s.add(kl);
+  const arcs=new THREE.Group();s.add(arcs);
+  let q=6,tau=1,mask=true;
+  const soft=(row,i)=>{const z=row.map((v,j)=>(mask&&j>i)?-Infinity:v/tau);const mx=Math.max(...z);const e=z.map(v=>v===-Infinity?0:Math.exp(v-mx));const su=e.reduce((a,b)=>a+b,0);return e.map(v=>v/su);};
+  function update(){const ink=C('--ink'),mu=C('--muted'),li=C('--line');clearGroup(arcs);
+    const Wm=S.map((r,i)=>soft(r,i));
+    for(let i=0;i<n;i++)for(let j=0;j<n;j++){const b=bars[i][j],w=Wm[i][j];const masked=mask&&j>i;
+      const h=masked?.02:Math.max(.02,w*3);b.scale.y=h;b.position.y=h/2;
+      b.material.color.copy(masked?li:(i===q?ink:mu));b.material.opacity=i===q?1:(masked?.35:.45);}
+    boxes.forEach((b,i)=>b.material.color.copy(i===q?ink:(Wm[q][i]>.15?C('--teal'):mu)));
+    const top=new THREE.Vector3(X(q),.2,0);
+    Wm[q].forEach((w,j)=>{if(w<.01||j===q)return;const e=new THREE.Vector3(X(j),.2,0);const mid=top.clone().add(e).multiplyScalar(.5);mid.y=.6+Math.abs(q-j)*.42;mid.z=-.4;
+      const curve=new THREE.QuadraticBezierCurve3(top,mid,e);const tb=new THREE.Mesh(new THREE.TubeGeometry(curve,32,.015+.11*w,8,false),new THREE.MeshStandardMaterial({color:j>q?C('--rose'):C('--teal'),transparent:true,opacity:.3+.7*w}));arcs.add(tb);});
+    const r=Wm[q].map((w,j)=>[T[j]+(j===q?' (self)':''),w]).sort((a,b)=>b[1]-a[1]).slice(0,3);
+    const H=-Wm[q].reduce((a,w)=>a+(w>0?w*Math.log2(w):0),0);
+    readEl.innerHTML=`Query <b>"${T[q]}"</b> attends to: ${r.map(([t,w])=>`${t} <b>${(w*100).toFixed(0)}%</b>`).join(' · ')}<br>Row sum ${Wm[q].reduce((a,b)=>a+b,0).toFixed(2)} · spread ${H.toFixed(2)} bits${!mask&&q<n-1?' · <span class="warn">mask off: seeing the future</span>':''}`;}
+  const qs=select({key:'q',label:'Query token (or tap a token)',options:T.map((t,i)=>i+': '+t),value:'6: it',on:v=>{q=+v.split(':')[0];update();}});
+  slider({key:'tau',label:'Softmax temperature',min:.2,max:3,step:.05,value:1,fmt:fx2,on:v=>{tau=v;update();}});
+  const r=row();toggle(r,{key:'mask',label:'Causal mask',value:true,on:v=>{mask=v;update();}});
+  m.onPick=h=>{const i=h.object.userData.q;if(i!=null)qs.set(i+': '+T[i]);};
+  update();
+};
+
+/* 3. Sampling */
+MOD.sampling=function(m){
+  const s=m.scene;camera.position.set(0,4.5,9.5);controls.target.set(0,1.6,0);
+  const tok=['fell','dropped','declined','slid','crashed','rose','stayed','rallied','sang','purple'];
+  const z=[3.2,2.9,2.5,1.9,1.4,.9,.6,.2,-1.8,-2.6];const n=tok.length;const X=i=>(i-(n-1)/2)*.95;
+  const bars=[],ghost=[],tally=[];const counts=new Array(n).fill(0);let total=0,last=-1,flash=0;
+  const fl=new THREE.Mesh(new THREE.PlaneGeometry(n*.95+.6,2.4),new THREE.MeshBasicMaterial({color:C('--line'),transparent:true,opacity:.5,side:THREE.DoubleSide}));fl.rotation.x=-Math.PI/2;s.add(fl);
+  tok.forEach((t,i)=>{const b=new THREE.Mesh(new THREE.BoxGeometry(.55,1,.55),new THREE.MeshStandardMaterial({color:C('--ink'),transparent:true,roughness:.4}));b.position.set(X(i),0,0);s.add(b);bars.push(b);
+    const gh=new THREE.Mesh(new THREE.BoxGeometry(.55,1,.08),new THREE.MeshBasicMaterial({color:C('--muted'),transparent:true,opacity:.25}));gh.position.set(X(i),0,-.75);s.add(gh);ghost.push(gh);
+    const ta=new THREE.Mesh(new THREE.BoxGeometry(.3,1,.3),new THREE.MeshStandardMaterial({color:C('--amber')}));ta.position.set(X(i),0,.7);ta.visible=false;s.add(ta);tally.push(ta);
+    const l=mkLabel('','rot',`<span>${t}</span>`);l.position.set(X(i),-.15,1.15);s.add(l);});
+  const gl=mkLabel('raw logits (back row)','dim');gl.position.set(X(n-1)+.4,3.6,-.75);s.add(gl);
+  let T=1,K=10,P=1,probs=[],keep=[];
+  function dist(){const zz=z.map(v=>v/T);const mx=Math.max(...zz);let e=zz.map(v=>Math.exp(v-mx));let su=e.reduce((a,b)=>a+b,0);let p=e.map(v=>v/su);
+    const order=p.map((v,i)=>[v,i]).sort((a,b)=>b[0]-a[0]);keep=new Array(n).fill(false);let cum=0;
+    order.forEach(([v,i],r)=>{if(r<K&&(cum<P||r===0)){keep[i]=true;cum+=v;}});
+    const ks=p.reduce((a,v,i)=>a+(keep[i]?v:0),0);probs=p.map((v,i)=>keep[i]?v/ks:0);return p;}
+  function update(){const raw=dist();const ink=C('--ink'),mu=C('--muted');
+    bars.forEach((b,i)=>{const h=Math.max(.03,probs[i]*7);b.scale.y=h;b.position.y=h/2;b.material.color.copy(keep[i]?ink:mu);b.material.opacity=keep[i]?1:.25;});
+    ghost.forEach((g,i)=>{const h=Math.max(.03,(z[i]+3)*.55);g.scale.y=h;g.position.y=h/2;});
+    tally.forEach((t,i)=>{const f=total?counts[i]/total:0;t.visible=total>0;const h=Math.max(.02,f*7);t.scale.y=h;t.position.y=h/2;});
+    const H=-probs.reduce((a,p)=>a+(p>0?p*Math.log2(p):0),0);const kept=keep.filter(Boolean).length;
+    readEl.innerHTML=`Context: “The Fed raised rates, so bond prices ___”<br>Candidates kept <b>${kept}</b>/10 · entropy <b>${H.toFixed(2)}</b> bits ≈ ${Math.pow(2,H).toFixed(1)} effective choices`+
+      (total?`<br>Samples ${total}: ${tok.map((t,i)=>[t,counts[i]]).filter(x=>x[1]).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([t,c])=>`${t} ${c}`).join(' · ')}${last>=0?` · last <b>${tok[last]}</b>`:''}`:'<br>Amber pillars appear once you sample: empirical frequency vs the blue probabilities.');}
+  function draw(){let r=Math.random(),acc=0;for(let i=0;i<n;i++){acc+=probs[i];if(r<=acc)return i;}return probs.findIndex(p=>p>0);}
+  slider({key:'T',label:'Temperature T',min:.1,max:2,step:.05,value:1,fmt:fx2,on:v=>{T=v;update();}});
+  slider({key:'K',label:'Top-k',min:1,max:10,step:1,value:10,fmt:v=>v===10?'off':v,on:v=>{K=v;update();}});
+  slider({key:'P',label:'Top-p (nucleus)',min:.05,max:1,step:.01,value:1,fmt:v=>v>=1?'off':v.toFixed(2),on:v=>{P=v;update();}});
+  const r=row();
+  btn(r,'Sample 1',()=>{last=draw();counts[last]++;total++;flash=.7;update();},true);
+  btn(r,'Sample 100',()=>{for(let k=0;k<100;k++){last=draw();counts[last]++;total++;}flash=.7;update();});
+  btn(r,'Clear samples',()=>{counts.fill(0);total=0;last=-1;update();});
+  m.tick=dt=>{if(flash>0){flash-=dt;bars.forEach((b,i)=>{b.material.emissive=b.material.emissive||new THREE.Color();b.material.emissive.copy(i===last&&flash>0?C('--amber'):new THREE.Color(0));b.material.emissiveIntensity=i===last?Math.max(0,flash):0;});}};
+  update();
+};
+
+/* 4. Gradient descent */
+MOD.descent=function(m){
+  const s=m.scene;camera.position.set(5.5,6.5,8);controls.target.set(0,0,0);
+  const g=(dx,dz,w)=>Math.exp(-(dx*dx+dz*dz)/w);
+  const f=(x,z)=>.06*(x*x+z*z)-1.3*g(x-1.4,z-.9,1.0)-.9*g(x+1.7,z+1.4,.7)+.12*Math.sin(2*x)*Math.cos(2*z);
+  const K=1.15,half=4,N=90;const geo=gridGeom(N,half);const pos=geo.attributes.position.array,col=geo.attributes.color.array;
+  let lo=1e9,hi=-1e9;for(let k=0;k<pos.length;k+=3){const v=f(pos[k],pos[k+2]);lo=Math.min(lo,v);hi=Math.max(hi,v);}
+  const cLo=C('--ink'),cHi=C('--amber'),tmp=new THREE.Color();
+  for(let k=0;k<pos.length;k+=3){const v=f(pos[k],pos[k+2]);pos[k+1]=v*K;tmp.copy(cLo).lerp(cHi,Math.pow((v-lo)/(hi-lo),.8));col[k]=tmp.r;col[k+1]=tmp.g;col[k+2]=tmp.b;}
+  geo.computeVertexNormals();
+  const surf=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({vertexColors:true,roughness:.75,side:THREE.DoubleSide,transparent:true,opacity:.92}));s.add(surf);m.pick.push(surf);
+  const wire=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:C('--fg'),wireframe:true,transparent:true,opacity:.05}));s.add(wire);
+  const mins=[[1.4,.9,'global min'],[-1.7,-1.4,'local min']].map(([x,z,t])=>{let bx=x,bz=z;for(let it=0;it<400;it++){const h=1e-3;const gx=(f(bx+h,bz)-f(bx-h,bz))/(2*h),gz=(f(bx,bz+h)-f(bx,bz-h))/(2*h);bx-=.05*gx;bz-=.05*gz;}
+    const l=mkLabel(t,'dim');l.position.set(bx,f(bx,bz)*K+.5,bz);s.add(l);return [bx,bz];});
+  const ball=new THREE.Mesh(new THREE.SphereGeometry(.14,20,20),new THREE.MeshStandardMaterial({color:C('--rose'),roughness:.3}));s.add(ball);
+  const MAXT=800;const tg=new THREE.BufferGeometry();const tp=new Float32Array(MAXT*3);tg.setAttribute('position',new THREE.BufferAttribute(tp,3));tg.setDrawRange(0,0);
+  const trail=new THREE.Line(tg,new THREE.LineBasicMaterial({color:C('--fg')}));s.add(trail);
+  let p={x:-3,z:1.2},v={x:0,z:0},lr=.1,mom=0,noise=0,running=false,acc=0,hist=[],status='',calm=0,steps=0,tn=0;
+  const grad=(x,z)=>{const h=1e-3;return [(f(x+h,z)-f(x-h,z))/(2*h),(f(x,z+h)-f(x,z-h))/(2*h)];};
+  function place(){ball.position.set(p.x,f(p.x,p.z)*K+.14,p.z);}
+  function reset(x,z){p={x,z};v={x:0,z:0};hist=[f(x,z)];tn=0;steps=0;calm=0;status='';tg.setDrawRange(0,0);push();place();draw();text();}
+  function push(){if(tn>=MAXT){tp.copyWithin(0,3);tn=MAXT-1;}tp[tn*3]=p.x;tp[tn*3+1]=f(p.x,p.z)*K+.03;tp[tn*3+2]=p.z;tn++;tg.setDrawRange(0,tn);tg.attributes.position.needsUpdate=true;}
+  function step(){const [gx,gz]=grad(p.x,p.z);const nx=gx+noise*randn(),nz=gz+noise*randn();v.x=mom*v.x-lr*nx;v.z=mom*v.z-lr*nz;p.x+=v.x;p.z+=v.z;steps++;
+    if(!isFinite(p.x)||Math.abs(p.x)>half||Math.abs(p.z)>half){p.x=clamp(p.x||0,-half,half);p.z=clamp(p.z||0,-half,half);running=false;status='<span class="warn">Left the map. Learning rate too high for this terrain.</span>';runB.textContent='Run';}
+    hist.push(f(p.x,p.z));if(hist.length>300)hist.shift();push();place();
+    if(Math.hypot(v.x,v.z)<2e-4&&noise===0){if(++calm>25){running=false;runB.textContent='Run';const d=mins.map(([x,z])=>Math.hypot(x-p.x,z-p.z));status=d[0]<.3?'<span class="ok">Converged in the global minimum.</span>':d[1]<.3?'<span class="warn">Stuck in the local minimum.</span>':'<span class="warn">Stuck on a small ripple (tiny local minimum).</span>';}}else calm=0;}
+  function text(){const [gx,gz]=grad(p.x,p.z);readEl.innerHTML=`Step <b>${steps}</b> · loss <b>${f(p.x,p.z).toFixed(3)}</b> · ‖∇L‖ ${Math.hypot(gx,gz).toFixed(3)} · step size ${Math.hypot(v.x,v.z).toFixed(3)}<br>${status||'Tap the surface to drop the ball anywhere, then Run.'}`;}
+  const cv=document.createElement('canvas');cv.className='spark';
+  function draw(){const w=cv.clientWidth||300,h=70,dpr=Math.min(devicePixelRatio||1,2);cv.width=w*dpr;cv.height=h*dpr;const c=cv.getContext('2d');c.scale(dpr,dpr);c.clearRect(0,0,w,h);
+    c.fillStyle=css('--muted');c.font='10px '+css('--mono');c.fillText('loss',2,10);if(hist.length<2)return;
+    const mn=lo,mx=hi;c.strokeStyle=css('--rose');c.lineWidth=1.6;c.beginPath();hist.forEach((L,i)=>{const x=i/(hist.length-1)*w,y=h-4-(L-mn)/(mx-mn)*(h-16);i?c.lineTo(x,y):c.moveTo(x,y);});c.stroke();}
+  slider({key:'lr',label:'Learning rate η',min:-2,max:.5,step:.01,value:-1,fmt:v=>Math.pow(10,v).toFixed(v<-1?3:2),on:v=>{lr=Math.pow(10,v);}});
+  slider({key:'mom',label:'Momentum μ',min:0,max:.97,step:.01,value:0,fmt:fx2,on:v=>{mom=v;}});
+  slider({key:'noise',label:'Mini-batch noise',min:0,max:1.2,step:.05,value:0,fmt:fx2,on:v=>{noise=v;}});
+  const r=row();const runB=btn(r,'Run',()=>{running=!running;runB.textContent=running?'Pause':'Run';if(running){status='';calm=0;}},true);
+  btn(r,'Step once',()=>{step();draw();text();});
+  btn(r,'Reset',()=>{running=false;runB.textContent='Run';reset(-3,1.2);});
+  btn(r,'Random start',()=>{running=false;runB.textContent='Run';reset((Math.random()*2-1)*3.5,(Math.random()*2-1)*3.5);});
+  uiEl.appendChild(cv);
+  m.onPick=h=>{running=false;runB.textContent='Run';reset(clamp(h.point.x,-half+.1,half-.1),clamp(h.point.z,-half+.1,half-.1));};
+  m.tick=dt=>{if(!running)return;acc+=dt;let did=false;while(acc>.04&&running){acc-=.04;step();did=true;}if(did){draw();text();}};
+  reset(-3,1.2);
+};
+
+/* 5. LoRA */
+MOD.lora=function(m){
+  const s=m.scene;camera.position.set(4.5,7,8.5);controls.target.set(-.6,.6,-.6);
+  const d=16,R=8,sp=.28,off=(d-1)/2*sp,HK=7;seed=11;
+  const W0=[...Array(d)].map(()=>[...Array(d)].map(()=>(rnd()*2-1)*.04));
+  const unit=()=>{const v=[...Array(d)].map(()=>rnd()*2-1);const nn=Math.hypot(...v);return v.map(x=>x/nn);};
+  const comps=[[2.2,unit(),unit()],[1.3,unit(),unit()],[.75,unit(),unit()]];
+  const Tg=[...Array(d)].map((_,i)=>[...Array(d)].map((_,j)=>comps.reduce((a,[w,u,v])=>a+w*u[i]*v[j],0)+(rnd()*2-1)*.02));
+  // truncated SVD by power iteration with deflation
+  const M=Tg.map(r=>r.slice());const U=[],Sg=[],Vt=[];
+  for(let k=0;k<R;k++){let v=unit();for(let it=0;it<80;it++){const mv=M.map(r=>r.reduce((a,x,j)=>a+x*v[j],0));const w=[...Array(d)].map((_,j)=>M.reduce((a,r,i)=>a+r[j]*mv[i],0));const nn=Math.hypot(...w)||1;v=w.map(x=>x/nn);}
+    const mv=M.map(r=>r.reduce((a,x,j)=>a+x*v[j],0));const sg=Math.hypot(...mv)||1e-9;const u=mv.map(x=>x/sg);U.push(u);Sg.push(sg);Vt.push(v);
+    for(let i=0;i<d;i++)for(let j=0;j<d;j++)M[i][j]-=sg*u[i]*v[j];}
+  const Bf=[...Array(d)].map((_,i)=>[...Array(R)].map((_,k)=>U[k][i]*Math.sqrt(Sg[k])));
+  const Af=[...Array(R)].map((_,k)=>[...Array(d)].map((_,j)=>Vt[k][j]*Math.sqrt(Sg[k])));
+  const Ar=[...Array(R)].map(()=>[...Array(d)].map(()=>(rnd()*2-1)*.5));
+  const box=new THREE.BoxGeometry(.22,1,.22);const mk=(cnt)=>{const im=new THREE.InstancedMesh(box,new THREE.MeshStandardMaterial({roughness:.5}),cnt);im.instanceMatrix.setUsage(THREE.DynamicDrawUsage);s.add(im);return im;};
+  const w0m=mk(d*d),dwm=mk(d*d),am=mk(R*d),bm=mk(d*R);m.pick.push(dwm);
+  const plate=(w,h,x,y,z)=>{const p=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.MeshBasicMaterial({color:C('--line'),transparent:true,opacity:.55,side:THREE.DoubleSide}));p.rotation.x=-Math.PI/2;p.position.set(x,y,z);s.add(p);return p;};
+  plate(d*sp+.2,d*sp+.2,0,-.01,0);const dwPlate=plate(d*sp+.2,d*sp+.2,0,2.4-.01,0);
+  const lbl=(t,x,y,z,c)=>{const l=mkLabel(t,c);l.position.set(x,y,z);s.add(l);return l;};
+  const lW=lbl('W₀ (frozen, d×d)',off+.9,0,off+.4,'dim'),lD=lbl('ΔW = B·A',off+.9,2.4,off+.4,'');const lA=lbl('A (r×d)',0,0,-off-2.9,'dim'),lB=lbl('B (d×r)',-off-2.9,0,off+.5,'dim');
+  const mat=new THREE.Matrix4(),col=new THREE.Color();
+  let r=4,t=1,merge=false,anim=0,sel=-1;
+  const setBar=(im,idx,x,y0,z,v,c)=>{const h=Math.max(.015,Math.abs(v)*HK);mat.makeScale(1,h,1);mat.setPosition(x,y0+(v>=0?h/2:-h/2),z);im.setMatrixAt(idx,mat);im.setColorAt(idx,c);};
+  function update(){const ink=C('--ink'),ro=C('--rose'),mu=C('--muted'),am_=C('--amber');
+    const A=Ar.map((row,k)=>row.map((x,j)=>x*(1-t)+Af[k][j]*t));const B=Bf.map(row=>row.map(x=>x*t));
+    const dW=[...Array(d)].map((_,i)=>[...Array(d)].map((_,j)=>{let a=0;for(let k=0;k<r;k++)a+=B[i][k]*A[k][j];return a;}));
+    const si=sel>=0?Math.floor(sel/d):-1,sj=sel>=0?sel%d:-1;
+    for(let i=0;i<d;i++)for(let j=0;j<d;j++){const idx=i*d+j,x=j*sp-off,z=i*sp-off;
+      const v=merge?W0[i][j]+dW[i][j]:W0[i][j];setBar(w0m,idx,x,0,z,v,merge?(v>=0?ink:ro):mu);
+      const c=(i===si&&j===sj)?am_:(dW[i][j]>=0?ink:ro);setBar(dwm,idx,x,2.4,z,dW[i][j],c);}
+    am.count=r*d;for(let k=0;k<r;k++)for(let j=0;j<d;j++)setBar(am,k*d+j,j*sp-off,0,-off-.6-k*sp,A[k][j]*.35,j===sj?am_:C('--teal'));
+    bm.count=d*r;for(let i=0;i<d;i++)for(let k=0;k<r;k++)setBar(bm,i*r+k,-off-.6-k*sp,0,i*sp-off,B[i][k]*.35,i===si?am_:C('--teal'));
+    [w0m,dwm,am,bm].forEach(im=>{im.instanceMatrix.needsUpdate=true;if(im.instanceColor)im.instanceColor.needsUpdate=true;});
+    dwm.visible=dwPlate.visible=lD.visible=!merge;lW.element.textContent=merge?'W = W₀ + B·A (merged)':'W₀ (frozen, d×d)';
+    let num=0,den=0;for(let i=0;i<d;i++)for(let j=0;j<d;j++){num+=(Tg[i][j]-dW[i][j])**2;den+=Tg[i][j]**2;}
+    const big=4096,full=big*big,lo_=2*big*r;
+    readEl.innerHTML=`Rank r=<b>${r}</b> · training ${(t*100).toFixed(0)}% · error vs target update <b>${(Math.sqrt(num/den)*100).toFixed(1)}%</b><br>`+
+      `Trainable here: 2·d·r = <b>${2*d*r}</b> vs d² = ${d*d}. At d=4096: <b>${lo_.toLocaleString()}</b> vs ${full.toLocaleString()} (${(lo_/full*100).toFixed(2)}%)`+
+      (sel>=0?`<br>ΔW[${si},${sj}] = row ${si} of B · column ${sj} of A (highlighted amber)`:'');}
+  slider({key:'r',label:'Rank r',min:1,max:R,step:1,value:r,on:v=>{r=v;update();}});
+  const tS=slider({key:'t',label:'Training progress',min:0,max:1,step:.01,value:1,fmt:v=>(v*100).toFixed(0)+'%',on:v=>{t=v;update();}});
+  const rw=row();btn(rw,'Train from init',()=>{anim=.0001;tS.set(0);},true);
+  toggle(rw,{key:'merge',label:'Merge into W₀',value:false,on:v=>{merge=v;update();}});
+  m.onPick=h=>{if(h.instanceId!=null){sel=sel===h.instanceId?-1:h.instanceId;update();}};
+  m.tick=dt=>{if(anim>0){anim+=dt/2.2;tS.set(Math.min(1,anim));if(anim>=1)anim=0;}};
+  update();
+};
+
+/* 6. Preference tuning */
+MOD.preference=function(m){
+  const s=m.scene;camera.position.set(6,6.5,8);controls.target.set(0,.6,0);
+  const N=64,half=4;const g=(x,z,cx,cz,w)=>Math.exp(-((x-cx)**2+(z-cz)**2)/w);
+  const geo=gridGeom(N,half),rg=gridGeom(N,half);const P=geo.attributes.position.array,Cl=geo.attributes.color.array,RP=rg.attributes.position.array;
+  const cnt=(N+1)*(N+1);const xs=[],zs=[];for(let k=0;k<cnt;k++){xs.push(P[k*3]);zs.push(P[k*3+2]);}
+  const ch=[2,1.6],rj=[-1.6,1.8],bug=[-2.8,-2.8];
+  const ref=xs.map((x,k)=>g(x,zs[k],0,0,3.2)+.45*g(x,zs[k],1.6,-1.6,1.2));const rs=ref.reduce((a,b)=>a+b,0);for(let k=0;k<cnt;k++)ref[k]/=rs;
+  const refMax=Math.max(...ref),HS=2.2/refMax;
+  for(let k=0;k<cnt;k++)RP[k*3+1]=ref[k]*HS;rg.attributes.position.needsUpdate=true;
+  const rmesh=new THREE.Mesh(rg,new THREE.MeshBasicMaterial({color:C('--muted'),wireframe:true,transparent:true,opacity:.28}));s.add(rmesh);
+  const pmesh=new THREE.Mesh(geo,new THREE.MeshStandardMaterial({vertexColors:true,roughness:.6,side:THREE.DoubleSide,transparent:true,opacity:.9}));s.add(pmesh);
+  const floor=new THREE.Mesh(new THREE.PlaneGeometry(8,8),new THREE.MeshBasicMaterial({color:C('--line'),transparent:true,opacity:.35,side:THREE.DoubleSide}));floor.rotation.x=-Math.PI/2;floor.position.y=-.01;s.add(floor);
+  const pin=(p,c,t)=>{const cn=new THREE.Mesh(new THREE.ConeGeometry(.14,.5,16),new THREE.MeshStandardMaterial({color:C(c)}));cn.rotation.x=Math.PI;cn.position.set(p[0],.25,p[1]);s.add(cn);
+    const ring=new THREE.Mesh(new THREE.RingGeometry(.7,.76,48),new THREE.MeshBasicMaterial({color:C(c),side:THREE.DoubleSide,transparent:true,opacity:.7}));ring.rotation.x=-Math.PI/2;ring.position.set(p[0],.01,p[1]);s.add(ring);
+    const l=mkLabel(t);l.position.set(p[0],.75,p[1]);s.add(l);return [cn,ring,l];};
+  pin(ch,'--teal','chosen answers');pin(rj,'--rose','rejected answers');const bugObjs=pin(bug,'--amber','reward bug');
+  const rl=mkLabel('wireframe = reference model','dim');rl.position.set(-3.6,0,3.9);s.add(rl);
+  let beta=.5,t=1,hack=false,mode='Preference (RLHF / DPO)',anim=0;
+  const reward=k=>1*g(xs[k],zs[k],ch[0],ch[1],1.4)-1.2*g(xs[k],zs[k],rj[0],rj[1],1.4)+(hack?3*g(xs[k],zs[k],bug[0],bug[1],.25):0);
+  function update(){const pi=new Float64Array(cnt);let su=0;const sft=mode.startsWith('SFT');
+    for(let k=0;k<cnt;k++){let v;if(sft){const q=g(xs[k],zs[k],ch[0],ch[1],1.2);v=Math.exp((1-t)*Math.log(ref[k]+1e-300)+t*Math.log(q+1e-300));}else v=ref[k]*Math.exp(t*reward(k)/beta);pi[k]=v;su+=v;}
+    let kl=0,er=0,mr=0,mb=0,mx=0;for(let k=0;k<cnt;k++){pi[k]/=su;if(pi[k]>1e-14)kl+=pi[k]*Math.log(pi[k]/ref[k]);er+=pi[k]*(1*g(xs[k],zs[k],ch[0],ch[1],1.4)-1.2*g(xs[k],zs[k],rj[0],rj[1],1.4));
+      if(Math.hypot(xs[k]-rj[0],zs[k]-rj[1])<.76)mr+=pi[k];if(Math.hypot(xs[k]-bug[0],zs[k]-bug[1])<.76)mb+=pi[k];mx=Math.max(mx,pi[k]);}
+    const lo=C('--ink'),hi=C('--teal'),tmp=new THREE.Color();
+    for(let k=0;k<cnt;k++){const h=Math.min(5.5,pi[k]*HS);P[k*3+1]=h;tmp.copy(lo).lerp(hi,Math.min(1,pi[k]/mx));Cl[k*3]=tmp.r;Cl[k*3+1]=tmp.g;Cl[k*3+2]=tmp.b;}
+    geo.attributes.position.needsUpdate=true;geo.attributes.color.needsUpdate=true;geo.computeVertexNormals();
+    bugObjs.forEach(o=>o.visible=hack);bS.inp.disabled=sft;
+    const verdict=mb>.3?'<span class="warn">Reward hacking: the policy is exploiting the bug.</span>':kl>2.5?'<span class="warn">Large drift from the reference. Expect lost fluency and diversity.</span>':kl<.05?'Barely moved from the reference.':'<span class="ok">Shifted toward chosen answers while staying near the reference.</span>';
+    readEl.innerHTML=`KL(π‖π_ref) <b>${kl.toFixed(2)}</b> nats · true reward E[r] <b>${er.toFixed(2)}</b> · mass on rejected ${(mr*100).toFixed(1)}%${hack?` · on bug <b>${(mb*100).toFixed(1)}%</b>`:''}<br>${verdict}`;}
+  select({key:'mode',label:'Objective',options:['Preference (RLHF / DPO)','SFT on chosen demos'],value:mode,on:v=>{mode=v;update();}});
+  const bS=slider({key:'beta',label:'KL strength β',min:-1.3,max:.7,step:.01,value:Math.log10(.5),fmt:v=>Math.pow(10,v).toFixed(v<-1?3:2),on:v=>{beta=Math.pow(10,v);update();}});
+  const tS=slider({key:'t',label:'Training progress',min:0,max:1,step:.01,value:1,fmt:v=>(v*100).toFixed(0)+'%',on:v=>{t=v;update();}});
+  const rw=row();btn(rw,'Train from reference',()=>{anim=.0001;tS.set(0);},true);
+  toggle(rw,{key:'hack',label:'Reward bug',value:false,on:v=>{hack=v;update();}});
+  m.tick=dt=>{if(anim>0){anim+=dt/2.5;tS.set(Math.min(1,anim));if(anim>=1)anim=0;}};
+  update();
+};
+
+/* ---------------- loader & loop ---------------- */
+let cur=null,curId=null;
+function load(id){curId=id;curKey=id;
+  if(ok){if(cur){disposeObj(cur.scene);}uiEl.innerHTML='';readEl.innerHTML='';labelR.domElement.innerHTML='';
+    cur={scene:baseScene(),pick:[],tick:null,onPick:null};controls.reset&&0;MOD[id](cur);controls.update();}
+  else{uiEl.innerHTML='';readEl.textContent='3D view unavailable.';}
+  $('#stageTitle').textContent=`${String(L[id].n).padStart(2,'0')} · ${L[id].title}`;
+  if(!store.visited[id]){store.visited[id]=1;L[id].cards.forEach((c,i)=>{const k=id+'-'+i;if(!store.cards[k])store.cards[k]={box:0,due:Date.now()};});save();}
+  renderChips();renderSheet(id);updateDue();
+  try{history.replaceState(null,'','#'+id)}catch(e){}
+}
+const ray=new THREE.Raycaster(),ptr=new THREE.Vector2();let down=null;
+if(ok){renderer.domElement.addEventListener('pointerdown',e=>down=[e.clientX,e.clientY]);
+  renderer.domElement.addEventListener('pointerup',e=>{if(!down||!cur||!cur.onPick)return;if(Math.hypot(e.clientX-down[0],e.clientY-down[1])>6)return;
+    const r=renderer.domElement.getBoundingClientRect();ptr.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(ptr,camera);
+    const h=ray.intersectObjects(cur.pick,false);if(h.length)cur.onPick(h[0]);});}
+let last=performance.now();
+function loop(tm){const dt=Math.min(.05,(tm-last)/1000);last=tm;if(ok&&cur&&!$('#labView').hidden){cur.tick&&cur.tick(dt);controls.update();renderer.render(cur.scene,camera);labelR.render(cur.scene,camera);}requestAnimationFrame(loop);}
+requestAnimationFrame(loop);
+const reTheme=()=>{if(curId&&!$('#labView').hidden)load(curId);};
+try{matchMedia('(prefers-color-scheme: dark)').addEventListener('change',reTheme);}catch(e){}
+new MutationObserver(reTheme).observe(document.documentElement,{attributes:true,attributeFilter:['data-theme']});
+
+/* ---------------- study sheet ---------------- */
+function esc(t){return t.replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function renderChips(){$('#chips').innerHTML=ORDER.map(id=>{const done=(store.exp[id]||[]).filter(Boolean).length===L[id].exp.length;
+  return `<button class="chip" data-id="${id}" aria-current="${id===curId}"><b>${L[id].n}</b>${L[id].short}${done?'<span class="tick" aria-label="experiments done">✓</span>':''}</button>`}).join('');
+  document.querySelectorAll('.chip').forEach(c=>c.addEventListener('click',()=>load(c.dataset.id)));}
+function renderSheet(id){const l=L[id];const ex=store.exp[id]||[];const shown=!!store.pred[id];
+  const due=l.cards.filter((c,i)=>{const s=store.cards[id+'-'+i];return s&&s.due<=Date.now();}).length;
+  $('#sheet').innerHTML=`
+   <div><div class="eyebrow">Module ${l.n} of 6</div><h2>${l.title}</h2></div>
+   <p class="model">${l.model}</p>
+   <div class="formula">${esc(l.formula)}</div>
+   <div class="block"><h3>Predict before you touch <span class="eyebrow">commit an answer first</span></h3>
+     <p>${l.predict[0]}</p>
+     <div><button class="btn" id="reveal" type="button">${shown?'Hide answer':'I have a guess, reveal'}</button></div>
+     <p class="answer" ${shown?'':'hidden'} id="ans">${l.predict[1]}</p></div>
+   <div class="block"><h3>Deliberate practice <span class="eyebrow">${ex.filter(Boolean).length}/${l.exp.length} done</span></h3>
+     <ol class="exp">${l.exp.map((e,i)=>`<li class="${ex[i]?'done':''}"><input type="checkbox" id="ex_${id}_${i}" ${ex[i]?'checked':''} aria-label="Mark experiment ${i+1} done"><span>${e}</span></li>`).join('')}</ol></div>
+   <div class="block"><h3>Teach it back <span class="eyebrow">Feynman drill</span></h3>
+     <p>${l.teach} Write it without looking at this page, then compare with the model above.</p>
+     <textarea id="teach_${id}" placeholder="Three plain sentences, no jargon…">${esc(store.teach[id]||'')}</textarea></div>
+   <div class="block"><h3>Recall deck <span class="eyebrow">${l.cards.length} cards · ${due} due</span></h3>
+     <p>These cards are now in your review deck and will come back on a spaced schedule.</p>
+     <div><button class="btn primary" id="goReview" type="button">Review due cards</button></div></div>`;
+  $('#reveal').onclick=()=>{store.pred[id]=!store.pred[id];save();renderSheet(id);};
+  l.exp.forEach((e,i)=>{$(`#ex_${id}_${i}`).onchange=ev=>{const a=store.exp[id]||[];a[i]=ev.target.checked;store.exp[id]=a;save();renderSheet(id);renderChips();};});
+  $(`#teach_${id}`).oninput=ev=>{store.teach[id]=ev.target.value;save();};
+  $('#goReview').onclick=()=>show('review');
+}
+
+/* ---------------- spaced repetition ---------------- */
+const IV=[0,1,3,7,16,35,80],DAY=864e5;
+function allCards(){const out=[];ORDER.forEach(id=>L[id].cards.forEach((c,i)=>{const k=id+'-'+i;if(store.cards[k])out.push({k,id,q:c[0],a:c[1],s:store.cards[k]});}));return out;}
+function updateDue(){const n=allCards().filter(c=>c.s.due<=Date.now()).length;$('#dueCount').textContent=n;$('#dueCount').hidden=n===0;}
+let revealed=false,ahead=false;
+function fmtIn(ms){if(ms<36e5)return Math.max(1,Math.round(ms/6e4))+' min';if(ms<DAY)return Math.round(ms/36e5)+' h';return Math.round(ms/DAY)+' d';}
+function renderReview(){const cards=allCards();const now=Date.now();const due=cards.filter(c=>c.s.due<=now||ahead).sort((a,b)=>a.s.due-b.s.due);const el=$('#card');
+  if(!cards.length){el.innerHTML=`<div class="eyebrow">Review</div><p class="q">Your deck is empty.</p><p>Open any module in the Lab and its cards join the deck automatically.</p><div><button class="btn primary" id="toLab" type="button">Go to the Lab</button></div>`;$('#toLab').onclick=()=>show('lab');}
+  else if(!due.length){const next=Math.min(...cards.map(c=>c.s.due));el.innerHTML=`<div class="eyebrow">Review</div><p class="q">Nothing due right now.</p><p>Next card returns in <span class="mono">${fmtIn(next-now)}</span>. Spacing is the point: recall is strongest when it is slightly hard.</p><div class="grade"><button class="btn" id="aheadB" type="button">Study ahead anyway</button></div>`;$('#aheadB').onclick=()=>{ahead=true;renderReview();};}
+  else{const c=due[0];const b=c.s.box;const nxt=x=>fmtIn(IV[Math.min(IV.length-1,x)]*DAY);
+    el.innerHTML=`<div class="eyebrow">${L[c.id].title} · box ${b} · ${due.length} in queue</div><p class="q">${esc(c.q)}</p>`+
+      (revealed?`<p class="a">${esc(c.a)}</p><div class="grade"><button class="btn again" data-g="0" type="button">Again<small>1 min</small></button><button class="btn good" data-g="1" type="button">Good<small>${nxt(b+1)}</small></button><button class="btn easy" data-g="2" type="button">Easy<small>${nxt(b+2)}</small></button></div>`
+      :`<p class="small">Answer out loud or on paper before revealing.</p><div class="grade"><button class="btn primary" id="rv" type="button">Show answer</button></div>`);
+    if(!revealed)$('#rv').onclick=()=>{revealed=true;renderReview();};
+    else el.querySelectorAll('[data-g]').forEach(bt=>bt.onclick=()=>{const gr=+bt.dataset.g;const s=store.cards[c.k];
+      if(gr===0){s.box=1;s.due=Date.now()+6e4;}else{s.box=Math.min(IV.length-1,s.box+gr);s.due=Date.now()+IV[s.box]*DAY;}
+      save();revealed=false;updateDue();renderReview();});}
+  $('#boxes').innerHTML=ORDER.map(id=>{const cs=cards.filter(c=>c.id===id);if(!cs.length)return `<div class="boxrow"><span>${L[id].n} · ${L[id].short}</span><div class="bar"></div><span class="small mono">—</span></div>`;
+    const lrn=cs.filter(c=>c.s.box<=1).length,yng=cs.filter(c=>c.s.box>1&&c.s.box<=3).length,mat=cs.length-lrn-yng;const w=v=>(v/cs.length*100)+'%';
+    return `<div class="boxrow"><span>${L[id].n} · ${L[id].short}</span><div class="bar"><i style="width:${w(lrn)};background:var(--rose)"></i><i style="width:${w(yng)};background:var(--amber)"></i><i style="width:${w(mat)};background:var(--teal)"></i></div><span class="small mono">${mat}/${cs.length}</span></div>`;}).join('');
+}
+
+/* ---------------- tabs & routing ---------------- */
+function show(v){const lab=v==='lab';$('#labView').hidden=!lab;$('#reviewView').hidden=lab;$('#tabLab').setAttribute('aria-selected',lab);$('#tabReview').setAttribute('aria-selected',!lab);
+  if(lab){load(curId||'embeddings');requestAnimationFrame(resize);}else{ahead=false;revealed=false;renderReview();try{history.replaceState(null,'','#review')}catch(e){}}}
+$('#tabLab').onclick=()=>show('lab');$('#tabReview').onclick=()=>show('review');
+const h=(location.hash||'').slice(1);
+if(h==='review'){curId='embeddings';show('review');updateDue();}else{load(ORDER.includes(h)?h:'embeddings');}
+setInterval(updateDue,30000);
+})();
+</script>
+
+</body>
+</html>

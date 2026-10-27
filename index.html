@@ -1,0 +1,948 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<style>:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0;font:14px system-ui,sans-serif}img{max-width:100%}[hidden]{display:none!important}</style>
+</head>
+<body>
+<title>Where a Word Goes</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400;1,500&family=DM+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a sunlit desk with an open notebook. Left page = the lesson (real HTML laid into the 3D scene); right page = a pop-up diorama with a dial, a switch and a readout card. Narrow screens: diorama on top, the pages flatten below. */
+:root{
+  --desk:#E6E1D7; --paper:#F7F3EA; --paper2:#F3EFE5; --grid:rgba(160,148,124,.16); --ink:#1C1B19; --muted:#6F6A61;
+  --accent:#EF6A2C; --gold:#F2B226; --ok:#1F9D6B; --flap:#F6E6BD; --card:#FFFDF8; --blue:#3A6FE0;
+  --display:"Poppins",ui-sans-serif,system-ui,sans-serif;
+  --body:"Poppins",ui-sans-serif,system-ui,sans-serif;
+  --mono:"DM Mono",ui-monospace,SFMono-Regular,Menlo,monospace;
+  color-scheme:light;
+}
+html,body{height:100%}
+body{background:var(--desk);color:var(--ink);font:14px/1.5 var(--body);overflow:hidden}
+body.narrow{overflow:auto;height:auto}
+*{box-sizing:border-box}
+button{font:inherit;color:inherit}
+button:focus-visible,.knob:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+#app{height:100%;display:flex;flex-direction:column}
+#stage{position:relative;flex:1 1 auto;min-height:0;overflow:hidden;touch-action:none;background:var(--desk)}
+body.narrow #app{height:auto}
+body.narrow #stage{flex:none;height:62vh;min-height:360px}
+.css3,.gl,.css2{position:absolute!important;inset:0}
+.css3{z-index:0}
+.gl{z-index:1;pointer-events:none}
+.css2{z-index:2;pointer-events:none}
+.css2 *{pointer-events:none!important}
+.hud{position:absolute;inset:0;z-index:3;pointer-events:none}
+.hud>*{pointer-events:auto}
+
+/* HUD */
+.badge{position:absolute;top:14px;left:max(16px,env(safe-area-inset-left,0px));background:var(--ink);color:var(--paper);border:0;border-radius:6px;padding:7px 12px 7px;text-align:left;cursor:pointer;line-height:1.2}
+.badge b{display:block;font:700 13px var(--display);letter-spacing:-.01em}
+.badge span{font:400 10.5px var(--mono);opacity:.75}
+.contents{position:absolute;top:62px;left:max(16px,env(safe-area-inset-left,0px));background:var(--card);border:1.5px solid var(--ink);border-radius:8px;padding:8px;display:grid;gap:2px;width:250px;box-shadow:0 4px 0 var(--ink)}
+.contents button{display:grid;grid-template-columns:28px 1fr auto;gap:6px;align-items:center;text-align:left;border:0;background:transparent;padding:6px 8px;border-radius:5px;cursor:pointer;font-size:13px}
+.contents button:hover,.contents button[aria-current="true"]{background:var(--paper2)}
+.contents .n{font:500 11px var(--mono);color:var(--muted)}
+.contents .ck{font:500 11px var(--mono);color:var(--ok)}
+.hud-r{position:absolute;top:14px;right:max(16px,env(safe-area-inset-right,0px));display:flex;gap:8px;align-items:center}
+.zoom{background:var(--ink);color:var(--paper);font:500 11px var(--mono);padding:5px 8px;border-radius:5px;font-variant-numeric:tabular-nums}
+.recallbtn{background:var(--card);border:1.5px solid var(--ink);border-radius:6px;padding:4px 10px;font:600 12px var(--body);cursor:pointer;box-shadow:0 2px 0 var(--ink)}
+.recallbtn i{font:500 11px var(--mono);font-style:normal;background:var(--accent);color:#fff;border-radius:999px;padding:1px 6px;margin-left:4px}
+.capbar{position:absolute;left:50%;transform:translateX(-50%);bottom:16px;width:min(600px,calc(100% - 32px));display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid rgba(28,27,25,.18);border-radius:999px;padding:6px 8px 6px 6px;box-shadow:0 6px 18px rgba(28,27,25,.12)}
+.capbar button{border:0;background:transparent;width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:16px;flex:none}
+.capbar button:hover{background:var(--paper2)}
+#cap{flex:1;min-width:0;font-size:13px;line-height:1.3}
+#dots{display:flex;gap:4px;flex:none}
+#dots i{width:7px;height:7px;border-radius:999px;background:#D8D1C3;transition:width .2s}
+#dots i.on{width:18px;background:var(--accent)}
+body.narrow .capbar{bottom:10px}
+
+/* 3D page cards (shared by 3D and flat layouts) */
+.pg{width:600px;height:780px;background-color:var(--paper);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:30px 30px;color:var(--ink);font-size:12px;line-height:1.45;overflow:hidden;position:relative}
+.pg::after{content:"";position:absolute;inset:0 0 0 auto;width:46px;background:linear-gradient(to left,rgba(28,27,25,.13),transparent);pointer-events:none}
+.pg-inner{padding:30px 40px 22px 44px;height:100%;display:flex;flex-direction:column;gap:9px}
+.kicker{font:500 9.5px var(--mono);letter-spacing:.14em;color:var(--muted);display:flex;align-items:center;gap:7px;text-transform:uppercase}
+.kicker .dot{width:11px;height:11px;border:2px solid var(--accent);border-radius:50%;background:radial-gradient(circle,var(--ink) 0 2px,transparent 2.5px)}
+.pg h1{font:800 44px/1 var(--display);letter-spacing:-.03em;margin:2px 0 0;text-wrap:balance}
+.lede{margin:0;font-size:14px;line-height:1.4;max-width:46ch}
+.lab{font:500 9px var(--mono);letter-spacing:.16em;text-transform:uppercase;color:var(--accent)}
+.box{border:1.4px solid var(--ink);padding:8px 12px 9px;background:rgba(255,253,248,.55)}
+.idea{display:flex;flex-direction:column;gap:3px}
+.ir{display:grid;grid-template-columns:62px 1fr;gap:8px;align-items:center;font-size:12px}
+.ir .ic{display:flex;gap:2px;align-items:center}
+.chip{display:inline-block;width:11px;height:9px;border:1.2px solid var(--ink);border-radius:2px;background:var(--c)}
+.chip.r{border-radius:50%;width:10px;height:10px}
+.kwlab{margin-top:2px}
+.kw{display:grid;grid-template-columns:1fr 1fr;gap:4px 18px;font-size:11px;line-height:1.35}
+.kw p{margin:0}
+.kw b{font-style:italic;font-weight:600}
+.predict{position:relative;display:flex;flex-direction:column;gap:3px}
+.predict .q{margin:0;font:600 14px/1.3 var(--display)}
+.opts{display:flex;flex-direction:column;gap:1px;align-items:flex-start}
+.opt{display:flex;align-items:center;gap:8px;border:0;background:transparent;padding:2px 0;cursor:pointer;font-size:12.5px;text-align:left}
+.opt i{width:12px;height:12px;border:1.4px solid var(--ink);flex:none}
+.opt.on i{background:var(--accent);border-color:var(--accent)}
+.opt.on{font-weight:600}
+.opt.right{color:var(--ok)}
+.opt.right i{border-color:var(--ok)}
+.opt:disabled{cursor:default}
+.stamp{position:absolute;right:14px;bottom:12px;font:600 10.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;padding:4px 8px;border:2px solid;transform:rotate(-3deg)}
+.stamp.ok{color:var(--ok)}
+.stamp.no{color:var(--accent)}
+.runrow{display:grid;grid-template-columns:150px 1fr;gap:12px;align-items:start}
+.run{display:flex;align-items:center;gap:8px;background:var(--ink);color:var(--paper);border:0;border-radius:7px;padding:10px 16px;font:700 14px var(--display);cursor:pointer;box-shadow:0 3px 0 rgba(0,0,0,.35)}
+.run b{color:var(--accent);font-size:13px}
+.run:disabled{opacity:.45;cursor:default}
+.guess{font-size:10.5px;color:var(--muted);margin-top:5px;line-height:1.3}
+.flap{background:var(--flap);border:0;border-radius:2px;padding:9px 12px;text-align:left;display:flex;flex-direction:column;gap:1px;cursor:pointer;box-shadow:2px 3px 0 rgba(28,27,25,.12);min-height:72px;clip-path:polygon(0 0,100% 0,100% calc(100% - 14px),calc(100% - 14px) 100%,0 100%)}
+.flap b{font:700 14px var(--display)}
+.flap small{font-size:10.5px;color:var(--muted)}
+.flap.locked{opacity:.8;cursor:default}
+.exam{border-top:1.4px dashed var(--ink);padding-top:7px;display:flex;flex-direction:column;gap:2px}
+.exh{display:flex;justify-content:space-between}
+.marks{font:500 10px var(--mono)}
+.exam p{margin:0;font-size:12px;font-weight:500}
+.exam small{font-size:10px;color:var(--muted)}
+.pfoot{margin-top:auto;display:flex;justify-content:space-between;align-items:center;font:500 10px var(--mono);color:var(--muted)}
+.pnav{display:flex;gap:6px}
+.pnav button{border:1px solid rgba(28,27,25,.3);background:transparent;border-radius:4px;padding:3px 8px;font:500 10px var(--mono);cursor:pointer;color:var(--ink)}
+.pnav button:disabled{opacity:.3;cursor:default}
+.why{position:absolute;left:24px;right:30px;bottom:24px;background:var(--flap);padding:18px 22px 16px;box-shadow:0 8px 24px rgba(28,27,25,.25);display:flex;flex-direction:column;gap:8px;font-size:13.5px;line-height:1.5}
+.why p{margin:0}
+.whyans{font-size:12.5px}
+.fold{align-self:flex-start;border:1.4px solid var(--ink);background:transparent;border-radius:5px;padding:4px 12px;font:600 12px var(--body);cursor:pointer}
+
+.cc{width:300px;height:240px;background-color:var(--paper2);background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:30px 30px;padding:12px 14px 10px;display:flex;flex-direction:column;gap:6px;color:var(--ink)}
+.cc-row{display:flex;gap:12px;align-items:flex-start;flex:1;min-height:0}
+.dial{display:flex;flex-direction:column;align-items:center;width:112px;flex:none}
+.dface{position:relative;width:112px;height:92px}
+.knob{position:absolute;left:25px;top:15px;width:62px;height:62px;border-radius:50%;background:radial-gradient(circle at 36% 30%,#FFE79B,#F2B226 46%,#B5700F 100%);border:2px solid var(--ink);box-shadow:0 4px 0 var(--ink);cursor:grab;touch-action:none}
+.knob .notch{position:absolute;left:50%;top:5px;width:4px;height:15px;margin-left:-2px;border-radius:2px;background:var(--ink)}
+.tick{position:absolute;width:2px;height:6px;margin:-3px 0 0 -1px;background:var(--ink)}
+.tl{position:absolute;font:500 8.5px var(--mono);color:var(--muted);transform:translate(-50%,-50%);white-space:nowrap;cursor:pointer;background:transparent;border:0;padding:1px}
+.tl.on{color:var(--accent)}
+.dlab{font:500 8.5px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-top:4px}
+.dval{font:600 12px var(--display);white-space:nowrap}
+.side{display:flex;flex-direction:column;gap:9px;align-items:flex-start;padding-top:6px;min-width:0}
+.sw{display:flex;flex-direction:column;gap:3px;align-items:flex-start}
+.swr{display:flex;align-items:center;gap:6px;font:500 8.5px var(--mono);color:var(--muted)}
+.lever{width:50px;height:28px;background:var(--ink);border-radius:6px;position:relative;border:0;cursor:pointer;box-shadow:0 3px 0 rgba(0,0,0,.3)}
+.lever::before{content:"";position:absolute;width:4px;height:13px;background:#77736b;left:14px;top:7px;border-radius:2px;transform-origin:50% 100%;transform:rotate(-30deg);transition:left .2s,transform .2s}
+.lever::after{content:"";position:absolute;width:15px;height:15px;border-radius:50%;background:var(--accent);top:1px;left:5px;transition:left .2s;box-shadow:inset -2px -2px 0 rgba(0,0,0,.2)}
+.lever[aria-pressed="true"]::before{left:32px;transform:rotate(30deg)}
+.lever[aria-pressed="true"]::after{left:30px}
+.btns{display:flex;flex-wrap:wrap;gap:6px}
+.mini{font:600 11.5px var(--body);padding:5px 11px;border:1.5px solid var(--ink);border-radius:6px;background:var(--card);box-shadow:0 2px 0 var(--ink);cursor:pointer}
+.mini.dark{background:var(--ink);color:var(--paper)}
+.mini:disabled{opacity:.4;cursor:default}
+.turn{font-size:11px;line-height:1.35}
+.turn .lab{margin-right:6px}
+.fig{font-size:10px;color:var(--muted)}
+.fig b{color:var(--ink);font-weight:600}
+
+.ro{width:210px;height:180px;background:#FFFEFB;border:1.6px solid var(--ink);padding:10px 12px 9px;display:flex;flex-direction:column;gap:2px;color:var(--ink);font-variant-numeric:tabular-nums}
+.ro-l{font:500 8.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.ro-big{font:700 34px/1.05 var(--display);letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ro-sub{font-size:10.5px;line-height:1.3}
+.ro-lines{font:400 9.5px/1.45 var(--mono);color:var(--ink);margin-top:2px}
+.ro-warn{font:600 9.5px/1.3 var(--mono);color:var(--accent)}
+.ro-bar{margin-top:auto}
+.ro-bar span{font:500 8px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted)}
+.ro-bar div{height:8px;border:1.3px solid var(--ink);margin-top:2px}
+.ro-bar i{display:block;height:100%;background:var(--ok);transition:width .4s}
+
+/* in-scene labels */
+.lb{font:500 10px var(--mono);color:var(--muted);white-space:nowrap;background:rgba(247,243,234,.8);padding:1px 5px;border-radius:3px;line-height:1.35;text-align:center}
+.lb b{color:var(--ink);font-weight:500}
+.wl{font:500 9.5px var(--mono);color:var(--ink);white-space:nowrap;padding:0 3px;border-radius:3px}
+.wl.hot{background:var(--ink);color:var(--paper)}
+.tid{font:500 10px var(--mono);color:var(--ink);background:var(--card);border:1px solid var(--ink);border-radius:3px;padding:0 4px;white-space:nowrap;transition:opacity .35s}
+.nl{font:500 9.5px var(--mono);color:var(--ink);background:var(--card);border:1px solid var(--accent);border-radius:3px;padding:0 5px;white-space:nowrap;transition:opacity .3s}
+.ql{font:600 10px var(--mono);color:var(--accent);white-space:nowrap}
+.k{display:inline-block;width:9px;height:7px;border:1px solid var(--ink);margin:0 3px 0 6px}
+.k.a{background:#2BB3A3}.k.m{background:var(--gold)}
+.tagw{width:0;height:0;position:relative}
+.tdot{position:absolute;left:-8px;top:-8px;width:16px;height:16px;border:2.5px solid var(--accent);border-radius:50%;background:radial-gradient(circle,var(--ink) 0 3px,transparent 3.5px)}
+.tagc{position:absolute;left:14px;bottom:12px;background:#FFFBF0;border:1.5px solid var(--ink);border-radius:3px;padding:7px 11px 8px;font:12px/1.35 var(--body);color:var(--ink);white-space:nowrap;box-shadow:2px 3px 0 rgba(28,27,25,.15)}
+.tagc .th{display:flex;align-items:center;gap:6px;font:700 15px var(--display);margin-bottom:2px}
+.tagc .th i{width:12px;height:12px;border:2.5px solid var(--accent);border-radius:50%;background:radial-gradient(circle,var(--ink) 0 2px,transparent 2.5px)}
+.tagc .tn{font:500 10.5px var(--mono);color:var(--accent);margin-top:3px}
+
+/* flat layout */
+#flat{display:none;padding-block:16px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+body.narrow #flat{display:flex;flex-direction:column;gap:14px;align-items:center}
+.flatcards{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;width:100%}
+body.narrow .cc{border:1.4px solid var(--ink);height:auto;min-height:240px}
+body.narrow .ro{transform:rotate(-1.5deg)}
+body.narrow .pg{width:100%;max-width:600px;height:auto;min-height:0}
+body.narrow .pg::after{display:none}
+body.narrow .pg-inner{padding:24px 20px 20px}
+body.narrow .pg h1{font-size:38px}
+body.narrow .kw{grid-template-columns:1fr}
+body.narrow .runrow{grid-template-columns:1fr}
+
+/* recall */
+.review{position:fixed;inset:0;z-index:20;background:rgba(28,27,25,.45);display:grid;place-items:center;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.rv{width:min(540px,100%);background:#FFFEFA;background-image:linear-gradient(transparent 52px,#F0A7A0 52px,#F0A7A0 54px,transparent 54px),repeating-linear-gradient(transparent 0 27px,#BFD3EE 27px 28px);background-position:0 0,0 54px;border-radius:4px;box-shadow:0 18px 50px rgba(0,0,0,.3);padding:16px 24px 20px;display:flex;flex-direction:column;gap:12px;min-height:330px;position:relative}
+.rv-top{display:flex;justify-content:space-between;align-items:center;height:30px}
+.rv-top .lab{color:var(--muted)}
+.rv-x{border:0;background:transparent;font-size:20px;cursor:pointer;width:32px;height:32px;border-radius:50%}
+.rv-q{font:600 20px/1.35 var(--display);margin:6px 0 0;text-wrap:balance}
+.rv-a{font-size:15px;line-height:1.55;border-top:1.4px dashed var(--ink);padding-top:10px;margin:0}
+.rv-g{display:flex;flex-wrap:wrap;gap:8px;margin-top:auto}
+.rv-g .mini small{display:block;font:400 10px var(--mono);color:var(--muted)}
+.rv-g .again{border-color:var(--accent)}
+.rv-g .good{border-color:var(--ok)}
+.rv-boxes{font:500 10.5px var(--mono);color:var(--muted)}
+.fail{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div id="app">
+  <div id="stage">
+    <div class="hud" id="hud">
+      <button class="badge" id="badge" aria-expanded="false" aria-controls="contents"><b>where a word goes.</b><span id="badgeSub">stop 1 of 10 · tokenizer</span></button>
+      <div class="contents" id="contents" hidden></div>
+      <div class="hud-r"><span class="zoom" id="zoom">×1</span><button class="recallbtn" id="recallBtn" type="button">Recall<i id="dueN">0</i></button></div>
+      <div class="capbar"><button id="capPrev" type="button" aria-label="Previous">‹</button><span id="cap"></span><span id="dots"></span><button id="capNext" type="button" aria-label="Next">›</button><button id="capReplay" type="button" aria-label="Replay the experiment">⟳</button></div>
+    </div>
+  </div>
+  <div id="flat"><div class="flatcards" id="flatcards"></div></div>
+</div>
+<div class="review" id="review" hidden><div class="rv" id="rv"></div></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS2DRenderer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/renderers/CSS3DRenderer.js"></script>
+<script>
+(async function(){
+'use strict';
+const $=s=>document.querySelector(s);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const pad=n=>String(n).padStart(2,'0');
+const hex=c=>'#'+c.toString(16).padStart(6,'0');
+function mulberry(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+
+/* ---------- persistence ---------- */
+let S={};try{S=JSON.parse(localStorage.getItem('wawg.v1')||'{}')||{}}catch(e){S={}}
+S.stop=S.stop||0;S.pred=S.pred||{};S.done=S.done||{};S.ctl=S.ctl||{};S.cards=S.cards||{};
+const save=()=>{try{localStorage.setItem('wawg.v1',JSON.stringify(S))}catch(e){}};
+
+/* ---------- constants ---------- */
+const PX=60, TOP=0.3, PY=0.56;
+const DC=new THREE.Vector3(5,TOP,-2.4);
+const COL={ink:0x1C1B19,paper:0xF7F3EA,paper2:0xF3EFE5,accent:0xEF6A2C,gold:0xF2B226,ok:0x1F9D6B,blue:0x3A6FE0,teal:0x2BB3A3,rose:0xE0566F,grey:0xBDB6A9,desk:0xE6E1D7,card:0xFFFDF8};
+const TOK=[0xF6C44F,0x7FC8F8,0xF28C8C,0x9AD48D,0xC7A4F2,0xF7A86B,0x86D4C9,0xEFA3C8,0xB8D86B,0x9FB4F5,0xF5C7A0];
+const chip=(c,r)=>`<i class="chip${r?' r':''}" style="--c:${hex(c)}"></i>`;
+
+/* ---------- tweens ---------- */
+const ease={io:t=>t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2,out:t=>1-Math.pow(1-t,3),back:t=>{const c1=1.4,c3=c1+1;return 1+c3*Math.pow(t-1,3)+c1*Math.pow(t-1,2)},lin:t=>t};
+let tweens=[],INSTANT=false;
+function anim(dur,fn,e=ease.io,delay=0){return new Promise(r=>{if(INSTANT||dur<=0){fn(1);r();return}tweens.push({t:-delay,d:dur,fn,e,r})})}
+const wait=s=>anim(s,()=>{});
+function tickTweens(dt){const list=tweens.slice();for(const w of list){w.t+=dt;if(w.t<0)continue;const p=Math.min(1,w.t/w.d);w.fn(w.e(p));if(p>=1){const i=tweens.indexOf(w);if(i>=0)tweens.splice(i,1);w.r()}}}
+
+/* ---------- renderer & scene ---------- */
+const stage=$('#stage');
+let renderer;
+try{renderer=new THREE.WebGLRenderer({antialias:true,alpha:true})}catch(e){stage.insertAdjacentHTML('afterbegin','<div class="fail">This notebook needs WebGL, which this browser has turned off.</div>');return}
+renderer.setPixelRatio(Math.min(devicePixelRatio||1,2));
+renderer.setClearColor(0x000000,0);
+renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;
+renderer.domElement.className='gl';
+const css3=new THREE.CSS3DRenderer();css3.domElement.className='css3';
+const css2=new THREE.CSS2DRenderer();css2.domElement.className='css2';
+stage.prepend(css2.domElement);stage.prepend(renderer.domElement);stage.prepend(css3.domElement);
+const scene=new THREE.Scene();
+const camera=new THREE.PerspectiveCamera(32,1,0.5,400);
+const controls=new THREE.OrbitControls(camera,stage);
+controls.enableDamping=true;controls.dampingFactor=.09;controls.minDistance=4;controls.maxDistance=46;
+controls.maxPolarAngle=1.2;controls.minPolarAngle=.15;controls.minAzimuthAngle=-.8;controls.maxAzimuthAngle=.8;controls.screenSpacePanning=false;
+
+scene.add(new THREE.HemisphereLight(0xffffff,0xa89f90,.6));
+const sun=new THREE.DirectionalLight(0xfff6e8,.55);
+const sunDir=new THREE.Vector3(-0.55,0.72,-0.42).normalize();
+sun.position.copy(sunDir).multiplyScalar(60);sun.castShadow=true;
+sun.shadow.mapSize.set(2048,2048);Object.assign(sun.shadow.camera,{left:-26,right:26,top:26,bottom:-26,near:1,far:130});sun.shadow.bias=-.0006;sun.shadow.radius=3;
+scene.add(sun);scene.add(sun.target);
+/* window blinds: invisible to the camera, but they cast the stripes */
+{const blind=new THREE.Group();const u=new THREE.Vector3().crossVectors(sunDir,new THREE.Vector3(0,1,0)).normalize();const v=new THREE.Vector3().crossVectors(u,sunDir).normalize();
+ const ghost=new THREE.MeshBasicMaterial({colorWrite:false,depthWrite:false});
+ const c0=sunDir.clone().multiplyScalar(16);
+ for(let i=-7;i<=7;i++){const s=new THREE.Mesh(new THREE.BoxGeometry(60,.55,.1),ghost);s.castShadow=true;s.position.copy(c0).addScaledVector(v,i*1.55);s.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(u,v,sunDir));blind.add(s)}
+ const bar=new THREE.Mesh(new THREE.BoxGeometry(1.4,60,.1),ghost);bar.castShadow=true;bar.position.copy(c0).addScaledVector(u,4.5);bar.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(u,v,sunDir));blind.add(bar);
+ scene.add(blind)}
+
+/* ---------- material helpers ---------- */
+const gradMap=(()=>{const t=new THREE.DataTexture(new Uint8Array([105,175,226]),3,1,THREE.LuminanceFormat);t.minFilter=t.magFilter=THREE.NearestFilter;t.needsUpdate=true;return t})();
+const toon=(c,o={})=>new THREE.MeshToonMaterial(Object.assign({color:c,gradientMap:gradMap},o));
+const basic=(c,o={})=>new THREE.MeshBasicMaterial(Object.assign({color:c},o));
+const inkLine=new THREE.LineBasicMaterial({color:COL.ink,transparent:true,opacity:.8});inkLine.userData.shared=true;
+function edges(m,th=30){const e=new THREE.LineSegments(new THREE.EdgesGeometry(m.geometry,th),inkLine);m.add(e);return m}
+function box(w,h,d,c,o={}){const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),o.mat||toon(c));m.castShadow=o.cast!==false;m.receiveShadow=!!o.recv;if(o.edges!==false)edges(m);return m}
+function fitText(ctx,text,maxW,size,font){let s=size;ctx.font=font.replace('{s}',s);while(ctx.measureText(text).width>maxW&&s>8){s-=2;ctx.font=font.replace('{s}',s)}return s}
+function textTex(text,{w=256,h=128,bg='#FFFDF8',fg='#1C1B19',size,font='600 {s}px Poppins, sans-serif',align='center',sub}={}){const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');x.fillStyle=bg;x.fillRect(0,0,w,h);x.fillStyle=fg;x.textBaseline='middle';x.textAlign=align;const s=fitText(x,text,w*.86,size||Math.round(h*.46),font);x.fillText(text,align==='center'?w/2:w*.07,sub?h*.42:h/2+1);if(sub){x.font=`500 ${Math.round(s*.42)}px "DM Mono", monospace`;x.fillStyle='#6F6A61';x.fillText(sub,align==='center'?w/2:w*.07,h*.78)}const t=new THREE.CanvasTexture(c);t.anisotropy=4;return t}
+function tile(text,color,w,h,d,o={}){const face=o.face==='front'?4:2;const fw=w,fh=face===2?d:h;const tex=textTex(text,{w:Math.round(fw*300),h:Math.round(fh*300),bg:hex(o.bg??lighten(color,.35)),size:o.size,sub:o.sub});const side=toon(color);const top=toon(0xffffff,{map:tex});const mats=[side,side,side,side,side,side];mats[face]=top;const m=new THREE.Mesh(new THREE.BoxGeometry(w,h,d),mats);m.castShadow=true;edges(m);return m}
+function lighten(c,k){const a=new THREE.Color(c);a.lerp(new THREE.Color(0xffffff),k);return a.getHex()}
+function lbl(html,cls='lb'){const d=document.createElement('div');d.className=cls;d.innerHTML=html;return new THREE.CSS2DObject(d)}
+function line(pts,c=COL.ink,op=.8){return new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts),new THREE.LineBasicMaterial({color:c,transparent:op<1,opacity:op}))}
+function disposeTree(o){o.traverse(n=>{if(n.element instanceof Element)n.element.remove();if(n.geometry&&!n.geometry.userData.shared)n.geometry.dispose();const ms=n.material?(Array.isArray(n.material)?n.material:[n.material]):[];ms.forEach(m=>{if(m.userData&&m.userData.shared)return;if(m.map)m.map.dispose();m.dispose()})})}
+function clearGroup(g){while(g.children.length){const c=g.children[g.children.length-1];g.remove(c);disposeTree(c)}}
+function gridGeom(N,half){const g=new THREE.BufferGeometry();const pos=new Float32Array((N+1)*(N+1)*3),col=new Float32Array(pos.length),idx=[];for(let i=0;i<=N;i++)for(let j=0;j<=N;j++){const k=i*(N+1)+j;pos[k*3]=-half+2*half*j/N;pos[k*3+2]=-half+2*half*i/N}for(let i=0;i<N;i++)for(let j=0;j<N;j++){const a=i*(N+1)+j,b=a+1,c=a+N+1,d=c+1;idx.push(a,c,b,b,c,d)}g.setIndex(idx);g.setAttribute('position',new THREE.BufferAttribute(pos,3));g.setAttribute('color',new THREE.BufferAttribute(col,3));return g}
+
+/* ---------- desk, book, props ---------- */
+function canvasTex(w,h,draw){const c=document.createElement('canvas');c.width=w;c.height=h;draw(c.getContext('2d'),w,h);const t=new THREE.CanvasTexture(c);t.anisotropy=8;return t}
+const deskTex=canvasTex(512,512,(x,w,h)=>{x.fillStyle='#E6E1D7';x.fillRect(0,0,w,h);const r=mulberry(3);for(let i=0;i<9000;i++){x.fillStyle=`rgba(${r()<.5?'255,255,255':'120,108,90'},${r()*.07})`;x.fillRect(r()*w,r()*h,1+r()*2,1+r()*2)}});
+deskTex.wrapS=deskTex.wrapT=THREE.RepeatWrapping;deskTex.repeat.set(10,10);
+const desk=new THREE.Mesh(new THREE.PlaneGeometry(160,160),basic(0xffffff,{map:deskTex}));desk.rotation.x=-Math.PI/2;scene.add(desk);
+const deskShadow=new THREE.Mesh(new THREE.PlaneGeometry(160,160),new THREE.ShadowMaterial({opacity:.16}));deskShadow.rotation.x=-Math.PI/2;deskShadow.position.y=.005;deskShadow.receiveShadow=true;scene.add(deskShadow);
+const book=new THREE.Group();scene.add(book);
+{const cover=new THREE.Mesh(new THREE.BoxGeometry(21,.12,14.2),basic(COL.ink));cover.position.y=.06;cover.castShadow=true;book.add(cover);
+ const gridT=canvasTex(1000,1300,(x,w,h)=>{x.fillStyle='#F3EFE5';x.fillRect(0,0,w,h);x.strokeStyle='rgba(160,148,124,.16)';x.lineWidth=1.3;for(let i=0;i<=w;i+=50){x.beginPath();x.moveTo(i+.5,0);x.lineTo(i+.5,h);x.stroke()}for(let j=0;j<=h;j+=50){x.beginPath();x.moveTo(0,j+.5);x.lineTo(w,j+.5);x.stroke()}x.fillStyle='rgba(28,27,25,.45)';x.font='500 18px "DM Mono", monospace';x.textAlign='right';x.fillText('',w-40,h-28)});
+ const leftT=canvasTex(500,650,(x,w,h)=>{x.fillStyle='#F7F3EA';x.fillRect(0,0,w,h)});
+ const side=basic(0xE4DCCB);
+ const L=new THREE.Mesh(new THREE.BoxGeometry(10,.18,13),[side,side,basic(0xffffff,{map:leftT}),side,side,side]);L.position.set(-5,.21,0);book.add(L);
+ const R=new THREE.Mesh(new THREE.BoxGeometry(10,.18,13),[side,side,basic(0xffffff,{map:gridT}),side,side,side]);R.position.set(5,.21,0);book.add(R);
+ const gut=canvasTex(128,4,(x,w)=>{const g=x.createLinearGradient(0,0,w,0);g.addColorStop(0,'rgba(28,27,25,0)');g.addColorStop(.5,'rgba(28,27,25,.22)');g.addColorStop(1,'rgba(28,27,25,0)');x.fillStyle=g;x.fillRect(0,0,w,4)});
+ const gm=new THREE.Mesh(new THREE.PlaneGeometry(1.6,13),basic(0xffffff,{map:gut,transparent:true,depthWrite:false}));gm.rotation.x=-Math.PI/2;gm.position.set(0,TOP+.006,0);gm.renderOrder=3;book.add(gm);
+ const rib=new THREE.Mesh(new THREE.BoxGeometry(.32,.03,2.4),basic(COL.accent));rib.position.set(.55,.04,7.6);rib.rotation.y=.08;rib.castShadow=true;book.add(rib);
+ const bs=new THREE.Mesh(new THREE.PlaneGeometry(20.2,13.2),new THREE.ShadowMaterial({opacity:.13}));bs.rotation.x=-Math.PI/2;bs.position.y=TOP+.004;bs.receiveShadow=true;bs.renderOrder=2;book.add(bs)}
+/* sticky note with the prompt */
+const note=new THREE.Mesh(new THREE.BoxGeometry(3.6,.03,3.6),[basic(0xF5D96A),basic(0xF5D96A),basic(0xffffff,{map:canvasTex(512,512,(x,w,h)=>{x.fillStyle='#F8E07A';x.fillRect(0,0,w,h);x.fillStyle='#1C1B19';x.font='500 30px "DM Mono", monospace';x.fillText('YOUR PROMPT',40,70);x.font='italic 500 44px Poppins, sans-serif';['The Fed raised','rates, so bond','prices ___'].forEach((t,i)=>x.fillText(t,40,170+i*72));x.font='400 26px "DM Mono", monospace';x.fillStyle='#6F6A61';x.fillText('follow " prices" →',40,450)})}),basic(0xF5D96A),basic(0xF5D96A),basic(0xF5D96A)]);
+note.position.set(-13.6,.02,-3.2);note.rotation.y=.14;note.castShadow=true;scene.add(note);
+/* pencil */
+{const p=new THREE.Group();const body=new THREE.Mesh(new THREE.CylinderGeometry(.16,.16,6,6),toon(COL.accent));body.rotation.z=Math.PI/2;body.castShadow=true;p.add(edges(body));const tip=new THREE.Mesh(new THREE.ConeGeometry(.16,.5,6),toon(0xEED9B5));tip.rotation.z=Math.PI/2;tip.position.x=3.25;tip.castShadow=true;p.add(tip);p.position.set(-12.8,.16,3.4);p.rotation.y=-.5;scene.add(p)}
+/* mug */
+{const g=new THREE.Group();const m=new THREE.Mesh(new THREE.CylinderGeometry(1.3,1.2,2.3,40),toon(0xF8F4EC));m.castShadow=true;m.position.y=1.15;g.add(m);const cf=new THREE.Mesh(new THREE.CircleGeometry(1.15,40),basic(0x5A3B26));cf.rotation.x=-Math.PI/2;cf.position.y=2.12;g.add(cf);const h=new THREE.Mesh(new THREE.TorusGeometry(.6,.16,10,24,Math.PI),toon(0xF8F4EC));h.position.set(1.3,1.2,0);h.rotation.z=-Math.PI/2;h.castShadow=true;g.add(h);g.position.set(14.5,0,-6.4);scene.add(g)}
+/* recall card stack */
+const stack=new THREE.Group();scene.add(stack);stack.position.set(13.8,0,2.6);stack.rotation.y=-.12;
+let stackTop;{for(let i=0;i<6;i++){const c=new THREE.Mesh(new THREE.BoxGeometry(3.2,.045,2.1),basic(0xFFFDF8));c.position.y=.025+i*.05;c.rotation.y=(i%2?1:-1)*.03*i;c.castShadow=true;stack.add(c)}
+ stackTop=new THREE.Mesh(new THREE.BoxGeometry(3.2,.045,2.1),[basic(0xFFFDF8),basic(0xFFFDF8),basic(0xffffff),basic(0xFFFDF8),basic(0xFFFDF8),basic(0xFFFDF8)]);stackTop.position.y=.33;stackTop.castShadow=true;stack.add(stackTop)}
+function drawStack(n){const t=canvasTex(640,420,(x,w,h)=>{x.fillStyle='#FFFEFA';x.fillRect(0,0,w,h);x.strokeStyle='#F0A7A0';x.lineWidth=3;x.beginPath();x.moveTo(0,92);x.lineTo(w,92);x.stroke();x.strokeStyle='#BFD3EE';x.lineWidth=2;for(let y=140;y<h;y+=48){x.beginPath();x.moveTo(0,y);x.lineTo(w,y);x.stroke()}x.fillStyle='#EF6A2C';x.font='500 30px "DM Mono", monospace';x.fillText('RECALL DECK',36,62);x.fillStyle='#1C1B19';x.font='700 84px Poppins, sans-serif';x.fillText(n+' due',36,215);x.font='400 30px "DM Mono", monospace';x.fillStyle='#6F6A61';x.fillText('tap the stack to review',36,300)});const old=stackTop.material[2].map;stackTop.material[2].map=t;stackTop.material[2].needsUpdate=true;if(old)old.dispose()}
+
+/* ---------- diorama root & pop-up base ---------- */
+const dio=new THREE.Group();dio.position.copy(DC);scene.add(dio);
+{const base=new THREE.Group();dio.add(base);
+ const card=box(8.6,.06,7.4,0xE9E2D3,{recv:true,edges:true});card.position.y=.53;base.add(card);
+ [[-4.05,-3.45],[4.05,-3.45],[-4.05,3.45],[4.05,3.45]].forEach(([x,z])=>{const p=box(.16,.5,.16,0xF4F0E6);p.position.set(x,.25,z);base.add(p)});
+ const sk=new THREE.Group();const L=(a,b)=>sk.add(line([new THREE.Vector3(...a),new THREE.Vector3(...b)],COL.ink,.45));
+ L([-4.5,.01,-3.85],[4.5,.01,-3.85]);L([4.5,.01,-3.85],[4.5,.01,3.85]);L([4.5,.01,3.85],[-4.5,.01,3.85]);L([-4.5,.01,3.85],[-4.5,.01,-3.85]);
+ [[-4.5,-3.85],[4.5,-3.85],[4.5,3.85],[-4.5,3.85]].forEach(([x,z])=>{L([x,.01,z],[x,.75,z]);L([x-.25,.01,z],[x+.25,.01,z])});
+ base.add(sk)}
+dio.scale.y=.001;
+
+/* ---------- CSS3D cards on the pages ---------- */
+const holeMat=new THREE.MeshBasicMaterial({color:0,transparent:true,opacity:0,blending:THREE.NoBlending,side:THREE.DoubleSide});holeMat.userData.shared=true;
+function paperSlot(el,w,h,x,y,z,rot=0){const o=new THREE.CSS3DObject(el);o.position.set(x,y,z);o.rotation.set(-Math.PI/2,0,rot);o.scale.setScalar(1/PX);
+ const hole=new THREE.Mesh(new THREE.PlaneGeometry(w,h),holeMat);hole.position.set(x,y,z);hole.rotation.copy(o.rotation);hole.renderOrder=1;
+ const sh=new THREE.Mesh(new THREE.PlaneGeometry(w,h),new THREE.ShadowMaterial({opacity:.13}));sh.position.set(x,y+.002,z);sh.rotation.copy(o.rotation);sh.receiveShadow=true;sh.renderOrder=2;
+ return {o,hole,sh,el}}
+const pageEl=document.createElement('div');pageEl.className='pg';
+const ccEl=document.createElement('div');ccEl.className='cc';
+const roEl=document.createElement('div');roEl.className='ro';
+const slots=[paperSlot(pageEl,10,13,-5,TOP+.002,0),paperSlot(ccEl,5,4,3.0,TOP+.002,4.0),paperSlot(roEl,3.5,3,7.75,TOP+.032,4.0,.045)];
+const roBox=new THREE.Mesh(new THREE.BoxGeometry(3.5,.03,3),basic(0xFFFEFB));roBox.position.set(7.75,TOP+.015,4.0);roBox.rotation.y=.045;roBox.castShadow=true;scene.add(roBox);
+[pageEl,ccEl,roEl,$('#hud')].forEach(el=>{['pointerdown','touchstart','mousedown'].forEach(ev=>el.addEventListener(ev,e=>e.stopPropagation()))});
+
+/* ---------- layout modes ---------- */
+let wide=null;
+function isWide(){return innerWidth>=900&&innerWidth/innerHeight>=1.05}
+function applyLayout(){const w=isWide();if(w===wide)return;wide=w;document.body.classList.toggle('narrow',!w);
+ slots.forEach(s=>{if(w){s.el.style.position='absolute';scene.add(s.o,s.hole,s.sh)}else{scene.remove(s.o,s.hole,s.sh);s.el.style.position='relative';s.el.style.transform='';s.el.style.pointerEvents='auto'}});
+ roBox.visible=w;
+ if(!w){const fc=$('#flatcards');fc.append(ccEl,roEl);$('#flat').append(pageEl)}
+}
+function resize(){applyLayout();const w=stage.clientWidth,h=stage.clientHeight;renderer.setSize(w,h);css3.setSize(w,h);css2.setSize(w,h);camera.aspect=w/h;camera.updateProjectionMatrix();if(!touring&&!camBusy){const p=homePose();camera.position.copy(p[0]);controls.target.copy(p[1]);controls.update()}}
+function homePose(){const t=Math.tan(THREE.MathUtils.degToRad(camera.fov/2));const el=THREE.MathUtils.degToRad(57);
+ if(wide){const tgt=new THREE.Vector3(0,0,.8);const d=Math.max(11.6/(t*camera.aspect),7.4/t);return [tgt.clone().add(new THREE.Vector3(0,Math.sin(el),Math.cos(el)).multiplyScalar(d)),tgt]}
+ const tgt=DC.clone().add(new THREE.Vector3(0,.9,.6));const d=Math.max(5.2/(t*camera.aspect),4.6/t);return [tgt.clone().add(new THREE.Vector3(0,Math.sin(el),Math.cos(el)).multiplyScalar(d)),tgt]}
+let camBusy=false;
+async function camTo(p,t,d=1.2){camBusy=true;controls.enabled=false;const p0=camera.position.clone(),t0=controls.target.clone();await anim(d,k=>{camera.position.lerpVectors(p0,p,k);controls.target.lerpVectors(t0,t,k);camera.lookAt(controls.target)});camBusy=false;if(!touring)controls.enabled=true}
+const rel=(a,b,z)=>{const t=DC.clone().add(new THREE.Vector3(...b)),p=DC.clone().add(new THREE.Vector3(...a));const f=z==='×40'?1.5:1.6;return[t.clone().add(p.sub(t).multiplyScalar(wide?f:f*1.15)),t]};
+
+/* ---------- the ten stops ---------- */
+const PROMPT=['The',' Fed',' raised',' rates',',',' so',' bond',' prices'];
+const STOPS=[];
+
+/* 1 ─ tokens */
+STOPS.push({id:'tokens',n:1,nav:'tokenizer',kick:'Tokenizer · before the model sees anything',title:'Tokens',
+ lede:'The model can’t read letters. It reads a short list of word-pieces, and each piece is just a number.',
+ idea:[[chip(TOK[0])+chip(TOK[1])+chip(TOK[2]),'text → word-pieces: “The Fed raised…” → <i>The · Fed · raised</i>'],[chip(TOK[7]),'each piece → its id in one fixed list (about 50,000 pieces)'],[chip(TOK[8])+chip(TOK[9]),'common words are one piece; rare words become several']],
+ keys:[['token','a word-piece the model reads as one unit.'],['vocabulary','the fixed list of every token the model knows.'],['token id','a token’s position in that list.'],['context length','how many tokens the model can read at once.']],
+ q:'If the model read single letters instead of word-pieces, how much more work would attention do on this sentence?',opts:['About the same','About 5× more','About 20× more'],ans:2,
+ why:'This sentence is 36 characters but only 8 tokens. Attention compares every token with every earlier one, so its work grows with the square of the length: 36² ≈ 1,300 pairs against 8² = 64, about 20× more. Word-pieces keep sequences short, and splitting rare words into smaller pieces means the model can still spell anything.',
+ exam:'Why do LLMs read word-pieces instead of letters or whole words? Give one problem with each alternative.',
+ cards:[['Why word-pieces instead of letters or whole words?','Letters make sequences long, and attention work grows with length². Whole words can’t cover rare or new words (zeroDTE). Word-pieces stay short and can still spell anything.'],['What is a token id?','The token’s position in the model’s fixed vocabulary list. The model only ever sees these numbers, never letters.']],
+ turn:'Turn the dial to read by letters or by word-pieces. Flip the switch to add a rare word.',fig:'<b>Fig. 1</b> Your prompt, cut into tokens. · marks a leading space. Ids are illustrative.',
+ ctl:[{t:'dial',k:'mode',label:'Read by',opts:['letters','pieces'],def:'pieces'},{t:'switch',k:'rare',label:'Add “zeroDTE”',def:false}],
+ build(D){
+  const base=[['The',464],[' Fed',10169],[' raised',4376],[' rates',3965],[',',11],[' so',523],[' bond',6314],[' prices',4113]],rare=[[' zero',6632],['D',35],['TE',9328]];
+  const strip=new THREE.Group();strip.position.set(0,PY,-2.2);D.root.add(strip);const tg=new THREE.Group();D.root.add(tg);
+  let tiles=[],info=null;const full=r=>r?base.concat(rare):base;const vis=t=>t.replace(/^ /,'·');
+  function makeStrip(r){clearGroup(strip);const text=full(r).map(t=>t[0]).join('');const n=text.length,cw=Math.min(.2,8.2/n),len=n*cw;
+   const tex=canvasTex(n*40,84,(x,w,h)=>{x.fillStyle='#FFFDF8';x.fillRect(0,0,w,h);x.fillStyle='#1C1B19';x.font='500 40px "DM Mono", monospace';x.textAlign='center';x.textBaseline='middle';[...text].forEach((ch,i)=>x.fillText(ch,i*40+20,44))});
+   const m=new THREE.Mesh(new THREE.BoxGeometry(len,.06,.5),[basic(0xFFFDF8),basic(0xFFFDF8),toon(0xffffff,{map:tex}),basic(0xFFFDF8),basic(0xFFFDF8),basic(0xFFFDF8)]);m.position.y=.03;m.castShadow=true;edges(m);strip.add(m);
+   const l=lbl(`your prompt · <b>${n} characters</b>`);l.position.set(0,.05,-.62);strip.add(l);info={n,cw,len}}
+  function list(mode,r){const out=[];let pos=0;full(r).forEach(([t,id],i)=>{const c=TOK[i%TOK.length];if(mode==='pieces')out.push({t,id,c,start:pos,len:t.length});else [...t].forEach((ch,k)=>out.push({t:ch,id:ch.charCodeAt(0),c,start:pos+k,len:1,letter:true}));pos+=t.length});return out}
+  function place(L){const let_=L[0].letter,gap=let_?.03:.12;const rows=[[]];let w=0;L.forEach(o=>{o.w=let_?.17:o.len*.17+.08;if(w+o.w>7.9&&rows[rows.length-1].length){rows.push([]);w=0}rows[rows.length-1].push(o);w+=o.w+gap});rows.forEach((r,ri)=>{const tw=r.reduce((a,o)=>a+o.w,0)+gap*(r.length-1);let x=-tw/2;r.forEach(o=>{o.x=x+o.w/2;o.z=.4+ri*1.1;x+=o.w+gap})})}
+  async function cut(mode,r,dur){clearGroup(tg);const L=list(mode,r);place(L);const ps=[];
+   L.forEach((o,i)=>{const m=tile(o.letter?(o.t===' '?'·':o.t):vis(o.t),o.c,o.w,.22,.5);const sx=-info.len/2+(o.start+o.len/2)*info.cw;const s0=Math.max(.2,o.len*info.cw/o.w);m.position.set(sx,PY+.14,-2.2);m.scale.x=s0;tg.add(m);o.m=m;
+    if(!o.letter){const l=lbl(String(o.id),'tid');l.position.set(0,.38,0);l.element.style.opacity=0;m.add(l);o.l=l}
+    ps.push(anim(dur,k=>{m.position.set(sx+(o.x-sx)*k,PY+.14+Math.sin(k*Math.PI)*.6,-2.2+(o.z+2.2)*k);m.scale.x=s0+(1-s0)*k},ease.io,i*(o.letter?.012:.06)))});tiles=L;await Promise.all(ps)}
+  const ids=on=>tiles.forEach(o=>{if(o.l)o.l.element.style.opacity=on?1:0});
+  function tagIt(){const o=tiles.find(o=>o.t===' prices');if(o)D.tag(o.m,[0,.2,0],{now:'token 8 of 8 · id 4113',next:'the lookup table'});else D.untag()}
+  function readout(){const r=D.v.rare,mode=D.v.mode,n=list(mode,r).length,ch=full(r).reduce((a,t)=>a+t[0].length,0),pn=full(r).length;
+   D.readout({label:'Tokens',big:n,sub:`from ${ch} characters`,lines:[`attention pairs n² = ${(n*n).toLocaleString()}`,mode==='pieces'?`letters would need ${(ch*ch).toLocaleString()} (${Math.round(ch*ch/(n*n))}× more)`:`word-pieces would need ${pn*pn}`],bar:n*n/(44*44),barLabel:'attention work'})}
+  return{reset(){D.untag();clearGroup(tg);tiles=[];makeStrip(false)},
+   async update(){makeStrip(D.v.rare);readout();await cut(D.v.mode,D.v.rare,.6);ids(true);tagIt()},
+   steps:[{cap:'Your prompt arrives as one strip of 36 characters',zoom:'×10',cam:[[0,3.4,2.4],[0,.5,-1.8]],go:()=>wait(.2)},
+    {cap:'The tokenizer cuts it where common word-pieces end',zoom:'×10',cam:[[0,4.8,4.9],[0,.5,-.6]],go:()=>cut('pieces',false,1.1)},
+    {cap:'Each piece is swapped for its number in a fixed list of 50,257',zoom:'×10',go:async()=>{ids(true);await wait(.3)}},
+    {cap:'Our token, “ prices”, is now just the number 4113',zoom:'×40',cam:[[3.0,1.9,2.6],[3.15,.6,.4]],go:async()=>tagIt()}]}
+ }});
+
+/* 2 ─ embeddings */
+STOPS.push({id:'embed',n:2,nav:'embedding',kick:'Embedding table · layer 0',title:'Embeddings',
+ lede:'Each id pulls one row out of a giant table. That row, a list of 768 numbers, is what the token means to the model.',
+ idea:[[chip(TOK[7]),'id 4113 → row 4113 of the table'],[chip(COL.blue)+chip(COL.accent)+chip(COL.blue),'a row of 768 numbers = a point in space'],[chip(0x86D4C9,1)+chip(0x86D4C9,1),'words used alike end up near each other']],
+ keys:[['embedding','the list of numbers that stands for a token.'],['dimension','one slot in that list. GPT-2 small uses 768.'],['cosine similarity','how closely two embeddings point the same way, from −1 to 1.'],['learned','set by training, never written by hand.']],
+ q:'Before any training, where does “ bond” sit compared with “ yields”?',opts:['Right next to it','Somewhere random','Exactly opposite'],ans:1,
+ why:'The table starts as random numbers, so every word starts at a random point. Training nudges a row every time its token helps or hurts a prediction. Words that show up in the same kinds of sentences get nudged the same way and drift together. Nobody tells the model that bonds and yields are related; it picks that up from text.',
+ exam:'Where do embedding vectors come from, and why do related words end up close together?',
+ cards:[['Where do embedding vectors come from?','They are rows of a table that starts random and is learned during training. Words used in similar contexts get similar updates, so they drift close together.'],['What does cosine similarity measure?','The angle between two vectors: 1 = same direction, 0 = unrelated, −1 = opposite. Length is ignored.']],
+ turn:'Turn the dial to look up a different word. Flip the switch to see the table before training.',fig:'<b>Fig. 2</b> The lookup table and the space its rows live in. 3 of 768 dimensions shown.',
+ ctl:[{t:'dial',k:'word',label:'Look up',opts:['bond','prices','Fed','rates','fell','so'],def:'prices'},{t:'switch',k:'trained',label:'Trained table',def:true}],
+ build(D){
+  const R=D.root,rng=D.rng;const GC={mkt:0x86D4C9,price:0xEFA3C8,pol:0x7FC8F8,move:0xF7A86B,fn:0xCFC7B8};
+  const W=[['bond','mkt',[1.0,.55,.6]],['yields','mkt',[1.05,.75,.42]],['notes','mkt',[.82,.42,.82]],['stocks','mkt',[.6,.92,.9]],['prices','price',[.92,.08,1.05]],['costs','price',[.7,-.12,1.15]],['values','price',[.98,-.08,.84]],['Fed','pol',[-1.0,.82,-.4]],['rates','pol',[-.72,.98,-.6]],['raised','pol',[-.92,.6,-.82]],['fell','move',[.2,-1.0,-.72]],['rose','move',[-.12,-.95,-.5]],['dropped','move',[.32,-1.05,-.92]],['The','fn',[-.72,-.62,.92]],['so','fn',[-.95,-.42,.72]],['and','fn',[-.62,-.78,.66]]];
+  const C0=new THREE.Vector3(1.75,PY+1.62,-.7);
+  const fr=new THREE.LineSegments(new THREE.EdgesGeometry(new THREE.BoxGeometry(2.9,2.9,2.9)),new THREE.LineBasicMaterial({color:COL.ink,transparent:true,opacity:.3}));fr.position.copy(C0);R.add(fr);
+  const gh=new THREE.GridHelper(2.9,6,0xb8b0a2,0xd6cfc2);gh.position.set(C0.x,C0.y-1.45,C0.z);R.add(gh);
+  const sl=lbl('meaning space · <b>3 of 768 dimensions</b>');sl.position.set(C0.x,C0.y+1.72,C0.z);R.add(sl);
+  const pts=W.map(([w,g,p])=>{const tp=new THREE.Vector3(...p);const rp=new THREE.Vector3(rng()*2-1,rng()*2-1,rng()*2-1).multiplyScalar(1.2);const m=new THREE.Mesh(new THREE.SphereGeometry(.09,18,14),toon(GC[g]));m.castShadow=true;R.add(m);const l=lbl(w,'wl');l.position.y=.22;m.add(l);return{w,tp,rp,m,l}});
+  let tw=1;const posOf=o=>o.rp.clone().lerp(o.tp,tw);const placePts=()=>pts.forEach(o=>o.m.position.copy(C0).add(posOf(o)));
+  const cab=box(2.0,3.0,1.4,0xDCD2C0);cab.position.set(-2.7,PY+1.5,-1.3);R.add(cab);
+  for(let i=0;i<9;i++){if(i===4)continue;const f=box(1.7,.24,.06,0xEFE8DA);f.position.set(-2.7,PY+.25+i*.31,-.57);R.add(f)}
+  const cl=lbl('<b>embedding table</b><br>50,257 rows × 768');cl.position.set(-2.7,PY+3.3,-1.3);R.add(cl);
+  const dz0=-1.25,drawer=new THREE.Group();drawer.position.set(-2.7,PY+.25+4*.31,dz0);R.add(drawer);
+  drawer.add(box(1.7,.24,1.36,0xF7F0E2));
+  const bars=new THREE.InstancedMesh(new THREE.BoxGeometry(.085,1,.32),toon(0xffffff),16);bars.castShadow=true;drawer.add(bars);
+  const rowL=lbl('','tid');rowL.position.set(0,.25,.78);drawer.add(rowL);
+  const basis=[...Array(16)].map(()=>new THREE.Vector3(rng()*2-1,rng()*2-1,rng()*2-1).normalize());
+  const vec=w=>{const p=posOf(pts.find(o=>o.w===w));return basis.map((b,i)=>p.dot(b)*.95+Math.sin(i*7.1+w.length)*.06)};
+  const M=new THREE.Matrix4(),cc=new THREE.Color();
+  function setBars(w,k){vec(w).forEach((x,i)=>{const h=Math.max(.01,Math.abs(x)*.9*k);M.makeScale(1,h,1);M.setPosition(-.765+i*.102,.12+h/2,0);bars.setMatrixAt(i,M);bars.setColorAt(i,cc.setHex(x>=0?COL.blue:COL.accent))});bars.instanceMatrix.needsUpdate=true;if(bars.instanceColor)bars.instanceColor.needsUpdate=true}
+  const IDS={bond:6314,prices:4113,Fed:10169,rates:3965,fell:3214,so:523};
+  const nl=new THREE.Group();R.add(nl);
+  const cos=(a,b)=>a.dot(b)/(a.length()*b.length());
+  const near=w=>{const o=pts.find(p=>p.w===w),a=posOf(o);return pts.filter(p=>p!==o).map(p=>[p,cos(a,posOf(p))]).sort((x,y)=>y[1]-x[1])};
+  function hi(ws,links){clearGroup(nl);pts.forEach(p=>{const on=ws.includes(p.w);p.m.scale.setScalar(on?1.8:1);p.l.element.classList.toggle('hot',on)});links.forEach(([a,b])=>{nl.add(line([pts.find(p=>p.w===a).m.position.clone(),pts.find(p=>p.w===b).m.position.clone()],COL.ink,.7))})}
+  function readout(){const w=D.v.word,n=near(w);D.readout({label:`Nearest to “ ${w}”`,big:n[0][0].w,sub:`cosine ${n[0][1].toFixed(2)}`,lines:[`then ${n[1][0].w} ${n[1][1].toFixed(2)} · ${n[2][0].w} ${n[2][1].toFixed(2)}`,'one row = 768 numbers · 16 shown'],bar:(n[0][1]+1)/2,barLabel:D.v.trained?'trained table':'random table',warn:D.v.trained?'':'random: neighbours mean nothing yet'})}
+  function tagP(){D.tag(pts.find(p=>p.w==='prices').m,[0,.05,0],{now:'row 4113 · a point in space',next:'attention'})}
+  return{reset(){D.untag();tw=1;placePts();drawer.position.z=dz0;setBars('prices',0);rowL.element.textContent='';hi([],[])},
+   async update(){const w=D.v.word,f=tw,t=D.v.trained?1:0;rowL.element.textContent=`row ${IDS[w].toLocaleString()} · ${w}`;drawer.position.z=dz0+1.35;
+    await Promise.all([anim(.8,k=>{tw=f+(t-f)*k;placePts()}),anim(.5,k=>setBars(w,k))]);const n=near(w);hi([w],n.slice(0,3).map(([p])=>[w,p.w]));readout();tagP()},
+   steps:[{cap:'The embedding table: one row of numbers for every token',zoom:'×10',cam:[[-1.7,3.8,3.6],[-2.6,1.6,-1.1]],go:()=>wait(.2)},
+    {cap:'Id 4113 pulls out its row: 768 numbers, 16 shown here',zoom:'×10',cam:[[-1.9,2.8,2.6],[-2.7,1.5,.1]],go:async()=>{rowL.element.textContent='row 4,113 · prices';await anim(.8,k=>{drawer.position.z=dz0+1.35*k});await anim(.8,k=>setBars('prices',k))}},
+    {cap:'Those numbers are coordinates: the token becomes a point in space',zoom:'×10',cam:[[1.0,4.0,3.8],[1.6,1.6,-.6]],go:async()=>{const s=new THREE.Mesh(new THREE.SphereGeometry(.13,16,12),toon(0xEFA3C8));R.add(s);const a=new THREE.Vector3(-2.7,PY+1.8,.1),b=pts.find(p=>p.w==='prices').m.position.clone();await anim(1.1,k=>{s.position.lerpVectors(a,b,k);s.position.y+=Math.sin(k*Math.PI)*1.4});R.remove(s);disposeTree(s);hi(['prices'],[]);tagP()}},
+    {cap:'Before training the table is random, so every word lands anywhere',zoom:'×10',go:async()=>{hi(['bond','yields'],[]);await anim(1.3,k=>{tw=1-k;placePts();hi(['bond','yields'],[['bond','yields']])})}},
+    {cap:'Training pulls words used alike together: “ bond” ends up beside “ yields”',zoom:'×10',go:()=>anim(1.8,k=>{tw=k;placePts();hi(['bond','yields'],[['bond','yields']])})}]}
+ }});
+
+/* 3 ─ attention */
+STOPS.push({id:'attention',n:3,nav:'attention',kick:'Attention · inside layer 1 of 12',title:'Attention',
+ lede:'Each token looks back at the tokens before it and pulls in what it needs. This is how “ prices” learns which prices.',
+ idea:[[chip(TOK[7]),'query: what am I looking for?'],[chip(TOK[6])+chip(TOK[3]),'key: what do I offer?  match → a weight'],[chip(TOK[6])+chip(TOK[7]),'weights add to 100% → a blend of values']],
+ keys:[['query & key','two short vectors per token; their match decides the weight.'],['value','the information a token hands over when attended to.'],['attention weight','how much one token draws from another. Each token’s weights add to 1.'],['causal mask','blocks every token from seeing later tokens.']],
+ q:'Which earlier token should “ prices” draw on most?',opts:['“The”','“ bond”','“ so”'],ans:1,
+ why:'On its own, “ prices” is ambiguous: house prices, stock prices? Its query matches the key of “ bond” best, so most of its new information comes from “ bond”, with some from “ rates” and “ raised”. Afterwards the vector at “ prices” means “bond prices, in a story about rising rates”. Moving information between positions is attention’s whole job.',
+ exam:'What does attention let a token do that it can’t do alone? Why can’t it look at later tokens?',
+ cards:[['What does attention let a token do?','Pull in information from earlier tokens, weighted by how well its query matches their keys. The causal mask hides later tokens because, while generating, the future hasn’t been written yet.'],['Do one token’s attention weights always add up to 1?','Yes. They come out of a softmax, which turns scores into shares of 100%.']],
+ turn:'Turn the dial to choose which token is asking. Flip the switch to let it peek at the future.',fig:'<b>Fig. 3</b> One attention head. Link thickness = attention weight.',
+ ctl:[{t:'dial',k:'q',label:'Who’s asking',opts:PROMPT.map(t=>t.trim()),def:'prices'},{t:'switch',k:'future',label:'See the future',def:false}],
+ build(D){
+  const R=D.root,n=8,X=i=>-3.5+i*1.0,ZR=1.5,NC=4,CS=.3;const nm=i=>PROMPT[i].trim();
+  const S=[...Array(n)].map((_,i)=>[...Array(n)].map((_,j)=>i===j?1:.3));const set=(i,j,v)=>S[i][j]=v;
+  set(1,0,1.4);set(2,1,2.4);set(2,0,.6);set(3,2,2.2);set(3,1,1.4);set(4,3,1.8);set(4,2,.9);set(5,3,1.5);set(5,2,1.3);set(5,4,1.0);set(6,3,1.6);set(6,5,.9);set(6,2,.8);
+  set(7,6,2.6);set(7,3,1.6);set(7,2,1.3);set(7,1,1.0);set(7,5,.3);set(7,0,.1);set(7,4,0);set(7,7,1.2);
+  set(0,1,2.6);set(1,2,3.0);set(2,3,2.8);set(3,6,1.9);set(4,5,2.0);set(5,6,2.0);set(5,7,2.4);set(6,7,3.2);
+  const base=TOK.slice(0,8).map(c=>new THREE.Color(c));const cols=[];
+  PROMPT.forEach((t,i)=>{const tl=tile(t.replace(/^ /,'·'),TOK[i],.86,.22,.55);tl.position.set(X(i),PY+.11,ZR);R.add(tl);const cubes=[];for(let k=0;k<NC;k++){const c=box(CS,CS,CS,TOK[i]);c.position.set(X(i),PY+.22+.22+k*(CS+.06),ZR);R.add(c);cubes.push(c)}cols.push({tl,cubes})});
+  const topY=PY+.22+.22+(NC-1)*(CS+.06)+CS/2+.03;
+  const arcsG=new THREE.Group(),flowG=new THREE.Group();R.add(arcsG,flowG);
+  const ring=new THREE.Mesh(new THREE.TorusGeometry(.3,.04,8,40),toon(COL.accent));ring.rotation.x=Math.PI/2;ring.visible=false;R.add(ring);
+  const ql=lbl('','ql');R.add(ql);
+  const weights=(q,f)=>{const z=S[q].map((v,j)=>(!f&&j>q)?-Infinity:v);const m=Math.max(...z);const e=z.map(v=>v===-Infinity?0:Math.exp(v-m));const s=e.reduce((a,b)=>a+b,0);return e.map(v=>v/s)};
+  const curve=(q,j)=>{const a=new THREE.Vector3(X(j),topY,ZR),b=new THREE.Vector3(X(q),topY,ZR);const m=a.clone().add(b).multiplyScalar(.5);m.y=topY+.45+Math.abs(q-j)*.3;m.z=ZR-.9;return new THREE.QuadraticBezierCurve3(a,m,b)};
+  function arcs(q,w){clearGroup(arcsG);w.forEach((x,j)=>{if(j===q||x<.012)return;const t=new THREE.Mesh(new THREE.TubeGeometry(curve(q,j),40,.012+.12*x,8,false),toon(j>q?COL.rose:COL.teal,{transparent:true,opacity:.4+.6*x}));t.castShadow=true;t.geometry.setDrawRange(0,0);arcsG.add(t)})}
+  const grow=d=>anim(d,k=>arcsG.children.forEach(t=>t.geometry.setDrawRange(0,Math.floor(t.geometry.index.count*k/3)*3)));
+  function tint(q,w,k){const src=w.map((x,j)=>[j,x]).filter(([j])=>j!==q).sort((a,b)=>b[1]-a[1]);const plan=[[src[0],.15],[src[0],.9],[src[1],.75],[src[0],.9]];cols.forEach((c,i)=>c.cubes.forEach((m,ci)=>{m.material.color.copy(base[i]);if(i===q&&src.length){const [s,a]=plan[ci];m.material.color.lerp(base[s[0]],k*a*Math.min(1,s[1]*2.2))}}))}
+  function dim(q,f){cols.forEach((c,i)=>{const off=!f&&i>q;c.cubes.concat([c.tl]).forEach(m=>{(Array.isArray(m.material)?m.material:[m.material]).forEach(mt=>{mt.transparent=off;mt.opacity=off?.28:1})})})}
+  function setQ(q){ring.visible=true;ring.position.set(X(q),topY+.1,ZR);ql.position.set(X(q),topY+.55,ZR);ql.element.textContent='query'}
+  async function flow(q,w,d){const ps=[];w.forEach((x,j)=>{if(j===q||x<.04)return;const cv=curve(q,j);for(let k=0;k<Math.max(1,Math.round(x*14));k++){const s=new THREE.Mesh(new THREE.SphereGeometry(.06,10,8),toon(TOK[j]));s.position.copy(cv.getPoint(0));flowG.add(s);ps.push(anim(d,t=>s.position.copy(cv.getPoint(t)),ease.io,k*.1).then(()=>{flowG.remove(s);disposeTree(s)}))}});await Promise.all(ps)}
+  function readout(){const q=PROMPT.findIndex(t=>t.trim()===D.v.q),f=D.v.future,w=weights(q,f);const r=w.map((x,j)=>[j,x]).filter(([j])=>j!==q).sort((a,b)=>b[1]-a[1]);
+   D.readout({label:`“ ${nm(q)}” draws from`,big:`${nm(r[0][0])} ${(r[0][1]*100).toFixed(0)}%`,sub:`itself ${(w[q]*100).toFixed(0)}% · all weights add to 100%`,lines:[r.slice(1,3).map(([j,x])=>`${nm(j)} ${(x*100).toFixed(0)}%`).join(' · ')],warn:f&&q<7?'peeking at later words: cheating':'',bar:r[0][1],barLabel:'share from top source'})}
+  const tagP=()=>D.tag(cols[7].cubes[NC-1],[0,.2,0],{now:'a “bond prices” vector',next:'the detector bank'});
+  return{reset(){D.untag();clearGroup(arcsG);clearGroup(flowG);tint(7,[0,0,0,0,0,0,0,1],0);dim(7,true);ring.visible=false;ql.element.textContent=''},
+   async update(){const q=PROMPT.findIndex(t=>t.trim()===D.v.q),f=D.v.future,w=weights(q,f);clearGroup(flowG);dim(q,f);setQ(q);arcs(q,w);tint(q,w,1);readout();if(q===7)tagP();else D.untag();await grow(.5)},
+   steps:[{cap:'Every token sits in a row, holding its own vector',zoom:'×10',cam:[[0,4.4,6.4],[0,1.1,.6]],go:()=>wait(.2)},
+    {cap:'“ prices” sends out a query: what kind of prices am I?',zoom:'×10',cam:[[2.0,3.4,5.4],[2.8,1.5,1.0]],go:async()=>{dim(7,false);setQ(7);await anim(.8,k=>ring.scale.setScalar(1+Math.sin(k*Math.PI)*.5))}},
+    {cap:'Every earlier token answers. Better matches get thicker links',zoom:'×10',cam:[[.2,4.8,6.0],[0,1.7,.6]],go:async()=>{arcs(7,weights(7,false));await grow(1.2)}},
+    {cap:'Their values flow in, mostly from “ bond”',zoom:'×10',go:async()=>{const w=weights(7,false);await Promise.all([flow(7,w,1.4),anim(1.6,k=>tint(7,w,k))])}},
+    {cap:'“ prices” now carries “ bond”: these are bond prices',zoom:'×40',cam:[[4.0,2.8,3.6],[3.5,1.5,1.4]],go:async()=>tagP()}]}
+ }});
+
+/* 4 ─ feed-forward */
+STOPS.push({id:'mlp',n:4,nav:'feed-forward',kick:'Feed-forward · inside layer 1 of 12',title:'Feed-forward',
+ lede:'After attention, each token thinks on its own. A bank of pattern detectors checks its vector, and the ones that match add what they know.',
+ idea:[[chip(TOK[7])+chip(TOK[6]),'the vector is checked by 3,072 detectors at once'],[chip(COL.gold,1)+chip(COL.gold,1),'each detector that fires adds its own small vector'],[chip(TOK[7]),'one token at a time: no looking at other words']],
+ keys:[['neuron','one detector. It fires when the vector matches its pattern.'],['MLP','the detector bank, also called the feed-forward layer.'],['activation','how strongly a neuron fires. Negative matches are cut to zero.'],['parameters','the learned numbers inside the detectors. Most stored knowledge lives here.']],
+ q:'Can the feed-forward step look at other tokens in the sentence?',opts:['Yes, all of them','No, only its own vector','Only the token just before'],ans:1,
+ why:'The detector bank runs on each position separately, so it can only use what is already in that token’s vector. That’s why attention comes first: once “ prices” has pulled in “ bond” and “ rates”, the “rates up → prices down” detector can fire. Switch off the context from attention and watch that detector stay dark.',
+ exam:'Attention vs feed-forward: which one moves information between tokens, and which one holds most learned facts?',
+ cards:[['Attention vs feed-forward: what does each do?','Attention moves information between tokens. Feed-forward (MLP) layers work on each token alone and hold most of the learned facts and patterns.'],['Why must attention run before the MLP can use context?','The MLP only sees its own token’s vector, so context has to be copied in by attention first.']],
+ turn:'Turn the dial to send a different token through. Flip the switch to remove what attention added.',fig:'<b>Fig. 4</b> 32 of the 3,072 detectors in one layer. Labels are illustrative.',
+ ctl:[{t:'dial',k:'tok',label:'Token',opts:['prices','Fed','so'],def:'prices'},{t:'switch',k:'ctx',label:'Context from attention',def:true}],
+ build(D){
+  const R=D.root,vx=-3.3,vz=.8;const NAMES={3:'central bank',9:'bond market',14:'rates up → prices down',20:'plural noun',26:'finance topic',29:'linking word'};
+  const ACT={prices:{on:{9:.75,14:.92,20:.6,26:.7,5:.12,17:.1},off:{20:.65,26:.25,5:.1}},Fed:{on:{3:.95,26:.8,11:.15},off:{3:.85,26:.5}},so:{on:{29:.9,14:.3,22:.12},off:{29:.85,22:.1}}};
+  const HINT={prices:'+ likely falling',Fed:'+ policy maker',so:'+ cause → effect'};
+  const VC={prices:{on:[0xEFA3C8,0x86D4C9,0xE9B3CF,0x9AD48D,0xF0B8D4],off:[0xEFA3C8,0xEFA3C8,0xF2B6D1,0xEFA3C8,0xF4C3DA]},Fed:{on:[0x7FC8F8,0xF6C44F,0x95D2F9,0x7FC8F8,0xA8DAFA],off:[0x7FC8F8,0x7FC8F8,0x95D2F9,0x7FC8F8,0xA8DAFA]},so:{on:[0xF7A86B,0x9AD48D,0xF8B983,0xF28C8C,0xF9C79C],off:[0xF7A86B,0xF7A86B,0xF8B983,0xF7A86B,0xF9C79C]}};
+  const vc=[...Array(5)].map((_,i)=>{const m=box(.34,.34,.34,0xffffff);m.position.set(vx,PY+.2+i*.4,vz);R.add(m);return m});
+  const vl=lbl('“ prices” vector');vl.position.set(vx,PY+2.95,vz);R.add(vl);
+  const board=box(5.4,.1,3.0,0xEDE6D8,{recv:true});board.position.set(1.15,PY+.05,-.3);R.add(board);
+  const bl=lbl('detector bank · <b>32 of 3,072</b>');bl.position.set(1.15,PY+.1,-2.05);R.add(bl);
+  const lamps=[];for(let r=0;r<4;r++)for(let c=0;c<8;c++){const i=r*8+c;const m=new THREE.Mesh(new THREE.CylinderGeometry(.17,.17,1,20),toon(0xCFC7B8));m.castShadow=true;edges(m);const x=1.15-2.17+c*.62,z=-.3-1.05+r*.7;m.position.set(x,PY+.13,z);m.scale.y=.06;R.add(m);let l=null;if(NAMES[i]){l=lbl(NAMES[i],'nl');l.element.style.opacity=0;R.add(l)}lamps.push({m,l,x,z})}
+  const gold=new THREE.Color(COL.gold),acc=new THREE.Color(COL.accent),off=new THREE.Color(0xCFC7B8);
+  function setLamps(a,k){lamps.forEach((o,i)=>{const v=(a[i]||0)*k;o.m.scale.y=.06+v*1.3;o.m.position.y=PY+.1+o.m.scale.y/2;o.m.material.color.copy(off).lerp(v>.5?acc:gold,Math.min(1,v*1.6));o.m.material.emissive.copy(gold).multiplyScalar(v*.25);if(o.l){o.l.position.set(o.x,PY+.35+o.m.scale.y,o.z);o.l.element.style.opacity=v>.35?1:0}})}
+  const scan=new THREE.Mesh(new THREE.BoxGeometry(.08,.7,3.0),basic(COL.accent,{transparent:true,opacity:.35}));scan.visible=false;R.add(scan);
+  const hint=box(.34,.34,.34,COL.gold);hint.position.set(vx,PY+.2+5*.4,vz);hint.visible=false;R.add(hint);const hl=lbl('','tid');hl.position.set(.9,0,0);hint.add(hl);
+  const fly=new THREE.Group();R.add(fly);
+  function colorVec(t,ctx){VC[t][ctx?'on':'off'].forEach((c,i)=>vc[i].material.color.setHex(c))}
+  async function emit(a,d){const ps=[];Object.entries(a).forEach(([i,v])=>{i=+i;if(!v||v<.35)return;const o=lamps[i];const s=box(.16,.16,.16,COL.gold,{edges:false});s.position.set(o.x,PY+.3+o.m.scale.y,o.z);fly.add(s);const a0=s.position.clone(),b=new THREE.Vector3(vx,PY+2.2,vz);ps.push(anim(d,k=>{s.position.lerpVectors(a0,b,k);s.position.y+=Math.sin(k*Math.PI)*1.2},ease.io,i*.02).then(()=>{fly.remove(s);disposeTree(s)}))});await Promise.all(ps)}
+  function showHint(t,on,k=1){hint.visible=on;hint.scale.setScalar(Math.max(.001,k));hl.element.textContent=HINT[t]}
+  const acts=(t,c)=>ACT[t][c?'on':'off'];
+  function readout(){const t=D.v.tok,c=D.v.ctx,a=acts(t,c);const lit=Object.entries(a).filter(([,v])=>v>.3).sort((x,y)=>y[1]-x[1]);const top=lit.find(([i])=>NAMES[i]);
+   D.readout({label:'Detectors firing',big:`${lit.length} of 32`,sub:'shown here · 3,072 in the full layer',lines:[top?`strongest: ${NAMES[top[0]]} ${(+top[1]).toFixed(2)}`:'none strong'],warn:t==='prices'&&!c?'no context: it doesn’t know these are bond prices':'',bar:lit.length/6,barLabel:'activity'})}
+  return{reset(){D.untag();setLamps({},0);colorVec('prices',true);showHint('prices',false);scan.visible=false;clearGroup(fly)},
+   async update(){const t=D.v.tok,c=D.v.ctx,a=acts(t,c);vl.element.textContent=`“ ${t}” vector`;colorVec(t,c);readout();await anim(.5,k=>setLamps(a,k));const lit=Object.values(a).some(v=>v>.6)&&(t!=='prices'||c);showHint(t,lit);if(t==='prices'&&c)D.tag(hint,[0,.2,0],{now:'bond prices, likely falling',next:'eleven more layers'});else D.untag()},
+   steps:[{cap:'“ prices” arrives from attention, already carrying “ bond” and “ rates”',zoom:'×10',cam:[[-2.1,2.9,3.8],[-3.1,1.2,.6]],go:()=>wait(.2)},
+    {cap:'Its vector is checked against every detector at the same time',zoom:'×10',cam:[[.8,5.4,4.6],[1.1,.6,-.3]],go:async()=>{scan.visible=true;await anim(1.3,k=>scan.position.set(-1.2+k*4.7,PY+.4,-.3),ease.lin);scan.visible=false}},
+    {cap:'Detectors that match light up',zoom:'×10',go:()=>anim(.9,k=>setLamps(acts('prices',true),k))},
+    {cap:'Each one adds its piece of knowledge back into the vector',zoom:'×10',cam:[[-1.1,3.6,4.4],[-1.6,1.3,.2]],go:async()=>{await emit(acts('prices',true),1.1);showHint('prices',true,0);await anim(.4,k=>showHint('prices',true,k),ease.back)}},
+    {cap:'“ prices” now leans toward “falling”',zoom:'×40',cam:[[-2.3,3.0,3.0],[-3.2,2.1,.8]],go:async()=>D.tag(hint,[0,.2,0],{now:'bond prices, likely falling',next:'eleven more layers'})}]}
+ }});
+
+/* 5 ─ layers */
+STOPS.push({id:'layers',n:5,nav:'the stack',kick:'The stack · layers 1–12',title:'Layers',
+ lede:'One attention step plus one feed-forward step is a layer. GPT-2 small stacks twelve. The token’s vector rides up a shared lane, and each layer adds a little.',
+ idea:[[chip(0x2BB3A3)+chip(COL.gold),'layer = attention, then feed-forward'],[chip(TOK[7],1),'each layer adds to the vector, never replaces it'],[chip(COL.accent),'the guess sharpens as the vector climbs']],
+ keys:[['residual stream','the running vector each layer reads from and adds to.'],['layer','one attention step plus one feed-forward step.'],['depth','the number of layers. Deeper models can chain more steps.'],['logit lens','reading the model’s guess from the middle of the stack.']],
+ q:'Where in the stack does the model settle on “ fell”?',opts:['In layer 1','Gradually, through the middle and upper layers','Only at the very last layer'],ans:1,
+ why:'Early layers mostly sort out grammar and which words go together. Middle layers bring in meaning, like the link between rates and bond prices. The guess firms up as the vector climbs. Because every layer adds to the stream instead of overwriting it, information from the bottom survives to the top. Turn the residual switch off and the signal fades away.',
+ exam:'What is the residual stream, and why does adding (instead of replacing) matter?',
+ cards:[['What is the residual stream?','The running vector for each token that every layer reads from and adds to. Adding keeps earlier information intact and lets training signals reach deep layers.'],['What does one transformer layer contain?','An attention step (mixes information across tokens) and a feed-forward step (works on each token alone), each added to the residual stream.']],
+ turn:'Turn the dial to read the guess at any depth. Flip the switch to remove the residual connections.',fig:'<b>Fig. 5</b> Twelve layers and the lane between them. Guesses are illustrative.',
+ ctl:[{t:'dial',k:'depth',label:'Read at layer',min:0,max:12,step:1,def:12,fmt:v=>String(v),ticks:[0,6,12]},{t:'switch',k:'res',label:'Residual connections',def:true}],
+ build(D){
+  const R=D.root,tx=-1.6,tz=-.7;const WORDS=['fell','rose','dropped','declined','of','are'],WC=[COL.accent,COL.blue,0xF7A86B,0xF6C44F,0xC9C1B2,0xC9C1B2];
+  const LENS={0:[.02,.02,.01,.01,.10,.07],2:[.05,.06,.02,.02,.09,.09],4:[.11,.12,.04,.03,.05,.08],6:[.16,.18,.07,.05,.03,.06],8:[.24,.15,.11,.07,.02,.04],10:[.33,.08,.18,.11,.01,.02],12:[.38,.06,.21,.14,.01,.01]};
+  for(let i=0;i<12;i++){const s=box(3.0,.15,2.0,i%2?0xEFE8DB:0xE6DED0,{recv:true});s.position.set(tx,PY+.45+i*.3,tz);R.add(s);const a=box(.5,.09,.06,COL.teal);a.position.set(-.8,0,1.02);s.add(a);const m=box(.5,.09,.06,COL.gold);m.position.set(-.15,0,1.02);s.add(m)}
+  [[-1.42,-.92],[1.42,-.92],[-1.42,.92],[1.42,.92]].forEach(([x,z])=>{const p=box(.08,3.6,.08,0xD8D0C0);p.position.set(tx+x,PY+1.95,tz+z);R.add(p)});
+  [1,6,12].forEach(L=>{const l=lbl('layer '+L);l.position.set(tx-2.05,PY+.45+(L-1)*.3,tz);R.add(l)});
+  const kl=lbl('<i class="k a"></i>attention<i class="k m"></i>feed-forward');kl.position.set(tx,PY+.12,tz+1.55);R.add(kl);
+  const laneX=tx+.85,laneZ=tz+1.25;
+  const lane=new THREE.Mesh(new THREE.CylinderGeometry(.2,.2,3.9,24,1,true),toon(0x9FD6EF,{transparent:true,opacity:.35,side:THREE.DoubleSide}));lane.position.set(laneX,PY+2.1,laneZ);R.add(lane);
+  for(let i=0;i<12;i++){const c=box(.06,.04,.3,0x9FD6EF,{edges:false});c.position.set(laneX,PY+.45+i*.3,laneZ-.25);R.add(c)}
+  const puck=new THREE.Mesh(new THREE.SphereGeometry(.2,24,16),toon(0xEFA3C8,{transparent:true}));puck.castShadow=true;R.add(puck);
+  const gx=2.55,gz=-.6;const gb=box(3.1,.08,1.5,0xEDE6D8,{recv:true});gb.position.set(gx,PY+.04,gz);R.add(gb);
+  const gl=lbl('best guesses for the next word');gl.position.set(gx,PY+.08,gz-1.0);R.add(gl);
+  const bars=WORDS.map((w,i)=>{const b=box(.34,1,.5,WC[i]);b.position.set(gx-1.25+i*.5,PY+.5,gz);R.add(b);const l=lbl(w,'wl');l.position.set(gx-1.25+i*.5,PY+.08,gz+.95);R.add(l);return b});
+  let depth=0,res=true;
+  function probs(L,r){const a=Math.min(10,Math.floor(L/2)*2),b=a+2,f=(L-a)/2;const p=LENS[a].map((x,i)=>x+(LENS[b][i]-x)*f);if(r)return p;const g=Math.min(1,L/5);return p.map(x=>x+(.05-x)*g)}
+  function set(L,r){depth=L;res=r;puck.position.set(laneX,PY+.3+L*.3,laneZ);puck.material.opacity=r?1:Math.max(.12,1-L/9);const p=probs(L,r);bars.forEach((b,i)=>{const h=Math.max(.02,p[i]*8);b.scale.y=h;b.position.y=PY+.08+h/2})}
+  function top(L,r){const p=probs(L,r);return p.map((x,i)=>[WORDS[i],x]).sort((a,b)=>b[1]-a[1])}
+  function readout(){const L=D.v.depth,r=D.v.res,t=top(L,r);D.readout({label:`Guess at layer ${L}`,big:`${t[0][0]} ${(t[0][1]*100).toFixed(0)}%`,sub:`then ${t[1][0]} ${(t[1][1]*100).toFixed(0)}% · ${t[2][0]} ${(t[2][1]*100).toFixed(0)}%`,lines:[r?'each layer adds to the vector':'each layer replaces the vector'],warn:!r&&L>3?'no residual: the early signal is lost':'',bar:t[0][1]/.4,barLabel:'confidence'})}
+  const tagP=()=>D.tag(puck,[0,.05,0],{now:`layer ${Math.round(depth)} of 12 · best guess “${top(depth,res)[0][0]}”`,next:'the word scores'});
+  return{reset(){D.untag();set(0,true)},
+   async update(){const f=depth,t=D.v.depth,r=D.v.res;readout();await anim(.6,k=>set(f+(t-f)*k,r));tagP()},
+   steps:[{cap:'Twelve layers, each one attention plus feed-forward',zoom:'×10',cam:[[1.2,5.4,7.4],[.3,2.0,-.4]],go:async()=>{set(0,true);await wait(.2)}},
+    {cap:'Layer 0: only the word “ prices” itself. Best guess: “ of”',zoom:'×10',cam:[[0,2.6,4.6],[-.4,1.1,.2]],go:async()=>{set(0,true);tagP()}},
+    {cap:'Middle layers mix in meaning: “ rose” and “ fell” compete',zoom:'×10',cam:[[.6,3.6,5.2],[.1,2.0,-.1]],go:()=>anim(1.8,k=>{set(6*k,true);tagP()})},
+    {cap:'Upper layers settle it: “ fell” pulls ahead',zoom:'×10',cam:[[.9,4.8,5.6],[.3,2.8,-.3]],go:()=>anim(1.8,k=>{set(6+6*k,true);tagP()})},
+    {cap:'Every layer only added to the vector, so nothing from the start was lost',zoom:'×10',go:()=>anim(1.2,k=>{lane.material.opacity=.35+Math.sin(k*Math.PI)*.4})}]}
+ }});
+
+/* 6 ─ predict */
+STOPS.push({id:'predict',n:6,nav:'next-word scores',kick:'Unembedding · top of the stack',title:'Predict',
+ lede:'The final vector at “ prices” is compared with every word in the vocabulary. Better matches score higher, and softmax turns the scores into probabilities.',
+ idea:[[chip(TOK[7])+chip(0xDCD2C0),'final vector · each word’s vector = a score (logit)'],[chip(COL.blue)+chip(COL.accent),'softmax: scores → shares of 100%'],[chip(TOK[7]),'the last position predicts the next word']],
+ keys:[['logit','the raw score for one candidate word.'],['softmax','turns scores into probabilities that add to 1. Bigger gaps mean more confidence.'],['probability','how likely the model thinks each next word is.'],['next-token prediction','the only thing the model is trained to do.']],
+ q:'Change the prompt to “…so bond yields”. Which word gets the most probability?',opts:['“ rose”','“ fell”','“ stayed”'],ans:0,
+ why:'Bond prices and yields move in opposite directions. Same model, same weights: only the context changed, so the final vector points somewhere else. Nobody wrote that rule into the model; it absorbed the pattern from a great many finance sentences. Turn the dial and watch the bars swap.',
+ exam:'What does the model output at each step, and how does softmax turn it into probabilities?',
+ cards:[['What does the model output at each step?','One score (logit) per vocabulary word. Softmax exponentiates the scores and divides by their total, so they become positive and add up to 1.'],['Which position’s vector predicts the next token?','The last one. Every earlier position predicts its own next token, which is how one training sentence gives many lessons at once.']],
+ turn:'Turn the dial to change the end of the prompt. Flip the switch to see raw scores instead of probabilities.',fig:'<b>Fig. 6</b> 12 of 50,257 candidates. Scores are illustrative.',
+ ctl:[{t:'dial',k:'ctx',label:'Prompt ends',opts:['bond prices','stock prices','bond yields','mortgage rates'],def:'bond prices'},{t:'switch',k:'logits',label:'Raw scores',def:false}],
+ build(D){
+  const R=D.root;const WORDS=['fell','dropped','declined','slid','rose','jumped','climbed','stayed','are','were','and','purple'];
+  const CTX={'bond prices':[3.2,2.6,2.2,1.5,1.4,.9,.8,.6,.7,.5,.2,-3],'stock prices':[2.2,2.0,1.8,1.4,2.3,1.9,1.7,.7,.8,.6,.3,-3],'bond yields':[1.0,.8,.6,.4,3.3,2.6,2.4,.7,.8,.6,.2,-3],'mortgage rates':[.4,.3,.3,.1,3.0,2.6,2.8,.9,1.2,.8,.3,-3]};
+  const X=i=>-2.45+i*.58;
+  const vc=[0xEFA3C8,0x86D4C9,0xE9B3CF,0x9AD48D,0xF0B8D4,COL.gold].map((c,i)=>{const m=box(.34,.34,.34,c);m.position.set(-3.65,PY+.2+i*.4,.9);R.add(m);return m});
+  const vl=lbl('final vector');vl.position.set(-3.65,PY+2.75,.9);R.add(vl);
+  WORDS.forEach((w,i)=>{const c=tile(w,0xDCD2C0,.5,.68,.05,{face:'front',bg:0xFFFDF8});c.position.set(X(i),PY+.34,-1.5);R.add(c)});
+  const bars=WORDS.map((w,i)=>{const b=box(.36,1,.36,COL.blue);b.position.set(X(i),PY+.5,-.6);R.add(b);return b});
+  const sweep=new THREE.Group();R.add(sweep);
+  const soft=z=>{const m=Math.max(...z),e=z.map(v=>Math.exp(v-m)),s=e.reduce((a,b)=>a+b,0);return e.map(v=>v/s)};
+  const cur=WORDS.map(()=>({h:.02,c:new THREE.Color(COL.grey)}));
+  function target(ctx,lg){const z=CTX[ctx];if(lg)return z.map(v=>({h:(v+3.4)*.3,c:new THREE.Color(COL.grey)}));const p=soft(z),am=p.indexOf(Math.max(...p));return p.map((x,i)=>({h:Math.max(.03,x*7.2),c:new THREE.Color(i===am?COL.accent:COL.blue)}))}
+  function apply(st){st.forEach((s,i)=>{bars[i].scale.y=s.h;bars[i].position.y=PY+s.h/2;bars[i].material.color.copy(s.c)})}
+  async function morph(to,d,stagger=0){const from=cur.map(s=>({h:s.h,c:s.c.clone()}));await Promise.all(to.map((t,i)=>anim(d,k=>{cur[i].h=from[i].h+(t.h-from[i].h)*k;cur[i].c.copy(from[i].c).lerp(t.c,k);apply(cur)},ease.io,i*stagger)))}
+  function readout(){const ctx=D.v.ctx,lg=D.v.logits,z=CTX[ctx],p=soft(z);const o=WORDS.map((w,i)=>[w,p[i],z[i]]).sort((a,b)=>b[1]-a[1]);
+   D.readout({label:lg?'Highest score':'Next word',big:lg?`${o[0][0]} ${o[0][2].toFixed(1)}`:`${o[0][0]} ${(o[0][1]*100).toFixed(0)}%`,sub:`after “…so ${ctx}”`,lines:[lg?'raw scores can be negative and don’t add up to anything':`then ${o[1][0]} ${(o[1][1]*100).toFixed(0)}% · ${o[2][0]} ${(o[2][1]*100).toFixed(0)}%`],bar:o[0][1],barLabel:'top probability'})}
+  const tagF=()=>D.tag(bars[0],[0,.5,0],{now:'a probability for every word',next:'the sampler'});
+  return{reset(){D.untag();clearGroup(sweep);cur.forEach(s=>{s.h=.02;s.c.setHex(COL.grey)});apply(cur)},
+   async update(){clearGroup(sweep);readout();await morph(target(D.v.ctx,D.v.logits),.6);if(D.v.ctx==='bond prices'&&!D.v.logits)tagF();else D.untag()},
+   steps:[{cap:'The final vector at “ prices” reaches the top of the stack',zoom:'×10',cam:[[-2.6,2.8,3.6],[-3.4,1.3,.6]],go:()=>wait(.2)},
+    {cap:'It is scored against every word in the vocabulary',zoom:'×10',cam:[[.4,4.6,5.6],[.5,.9,-.8]],go:async()=>{const tg=target('bond prices',true);for(let i=0;i<WORDS.length;i++){clearGroup(sweep);sweep.add(line([new THREE.Vector3(-3.65,PY+2.2,.9),new THREE.Vector3(X(i),PY+.7,-1.5)],COL.accent,.9));const f={h:cur[i].h,c:cur[i].c.clone()};await anim(.14,k=>{cur[i].h=f.h+(tg[i].h-f.h)*k;cur[i].c.copy(tg[i].c);apply(cur)})}clearGroup(sweep)}},
+    {cap:'Softmax turns the scores into shares of 100%',zoom:'×10',go:()=>morph(target('bond prices',false),1.2)},
+    {cap:'“ fell” wins with 37%. “ purple” gets almost nothing',zoom:'×40',cam:[[-1.6,2.6,3.0],[-2.3,1.3,-.6]],go:async()=>tagF()}]}
+ }});
+
+/* 7 ─ sample */
+STOPS.push({id:'sample',n:7,nav:'sampling',kick:'Decoding · one word at a time',title:'Sampling',
+ lede:'The model gives odds, not an answer. A sampler picks one word, adds it to the text, and the whole journey runs again for the next one.',
+ idea:[[chip(COL.accent)+chip(COL.blue)+chip(TOK[0]),'odds → pick one word'],[chip(TOK[7])+chip(COL.accent),'add it to the text → run the model again'],[chip(COL.gold,1),'temperature: how adventurous the pick is']],
+ keys:[['sampling','drawing a word at random using the model’s odds.'],['temperature','below 1 sharpens the odds, above 1 flattens them.'],['greedy','always take the top word (temperature 0).'],['autoregressive','each new word becomes input for the next.']],
+ q:'Run the same prompt 10 times at temperature 0. How many different endings do you get?',opts:['1','About 3','10'],ans:0,
+ why:'Temperature 0 is greedy decoding: always take the most likely word. The network itself has no dice in it, so the same prompt gives the same odds, the same pick and the same text every time. All the randomness comes from the sampler. Raise the temperature and spin a few times to see variety, and eventually nonsense.',
+ exam:'Where does the randomness in LLM output come from, and what does temperature change?',
+ cards:[['Where does randomness in LLM output come from?','From the sampler, not the network. Temperature divides the scores before softmax: low = sharper and more predictable, high = flatter, more varied and more error-prone.'],['How does a model write a whole paragraph?','One token at a time: predict odds, pick a token, append it, then run the model again on the longer text.']],
+ turn:'Set the temperature, then spin. Start over to compare endings.',fig:'<b>Fig. 7</b> The odds as a wheel. Slice size = probability after temperature.',
+ ctl:[{t:'dial',k:'T',label:'Temperature',min:0,max:2,step:.05,def:1,fmt:v=>v.toFixed(2),ticks:[0,1,2]},{t:'btn',label:'Spin',act:'spin',dark:true},{t:'btn',label:'Start over',act:'restart'}],
+ build(D){
+  const R=D.root,Rw=1.7,cx=-1.3,cz=-1.1;const DOWN=new Set([' fell',' dropped',' declined',' slid',' tumbled']);
+  const P0=[[' fell',.38],[' dropped',.21],[' declined',.14],[' slid',.07],[' rose',.06],[' tumbled',.05],[' are',.05],[' remained',.04]];
+  function dist(g){if(!g.length)return P0;const last=g[g.length-1];if(last==='.'||g.length>=4)return null;
+   if(g.length===1){if(DOWN.has(last))return[[' sharply',.32],['.',.22],[' as',.18],[' on',.14],[' to',.14]];if(last===' rose')return[[' anyway',.3],['.',.3],[' slightly',.2],[' again',.2]];return[[' steady',.35],[' high',.25],[' flat',.2],['.',.2]]}
+   if([' as',' on',' to'].includes(last))return[[' investors',.4],[' traders',.3],[' expected',.3]];return[['.',.6],[' today',.25],[',',.15]]}
+  const temp=(d,T)=>{if(T<.03){const m=Math.max(...d.map(x=>x[1]));let done=false;return d.map(([t,p])=>{const on=!done&&p===m;if(on)done=true;return[t,on?1:0]})}const w=d.map(([t,p])=>[t,Math.pow(p,1/T)]),s=w.reduce((a,b)=>a+b[1],0);return w.map(([t,p])=>[t,p/s])};
+  const post=box(.3,.35,.3,0xD8D0C0);post.position.set(cx,PY+.18,cz);R.add(post);
+  const wheel=new THREE.Group();wheel.position.set(cx,PY+.4,cz);R.add(wheel);
+  const rim=new THREE.Mesh(new THREE.CylinderGeometry(Rw+.06,Rw+.06,.08,64),toon(COL.ink));rim.castShadow=true;wheel.add(rim);
+  const sl=new THREE.Group();wheel.add(sl);
+  const ptr=new THREE.Mesh(new THREE.ConeGeometry(.16,.45,4),toon(COL.accent));ptr.rotation.x=Math.PI/2;ptr.position.set(cx,PY+.55,cz-Rw-.3);ptr.castShadow=true;edges(ptr);R.add(ptr);
+  const row=new THREE.Group();R.add(row);
+  let gen=[],slices=[],spinning=false;
+  function build(d){clearGroup(sl);slices=[];let a=0;d.forEach(([t,p],i)=>{if(p<.002){return}const th=p*Math.PI*2;const g=new THREE.Mesh(new THREE.CircleGeometry(Rw,Math.max(3,Math.ceil(64*p)),a,th),toon(TOK[i%TOK.length]));g.rotation.x=-Math.PI/2;g.position.y=.05;sl.add(g);
+    sl.add(line([new THREE.Vector3(0,.06,0),new THREE.Vector3(Math.cos(a)*Rw,.06,-Math.sin(a)*Rw)],COL.ink,.7));
+    if(p>=.04){const m=a+th/2;const l=lbl(`${t.trim()||'␣'} <b>${(p*100).toFixed(0)}%</b>`,'wl');l.position.set(Math.cos(m)*Rw*.62,.12,-Math.sin(m)*Rw*.62);sl.add(l)}
+    slices.push({t,p,a,th});a+=th})}
+  function layoutRow(animate){const toks=[' bond',' prices'].concat(gen);const ws=toks.map(t=>Math.max(.42,t.length*.15+.1));const tw=ws.reduce((a,b)=>a+b,0)+.1*(toks.length-1);let x=-tw/2+.4;const kids=row.children;
+   toks.forEach((t,i)=>{let m=kids[i];if(!m){m=tile(t.replace(/^ /,'·'),i===0?TOK[6]:i===1?TOK[7]:0xF6C44F,ws[i],.22,.5);row.add(m);m.position.set(x+ws[i]/2,PY+.11,2.5)}const tx=x+ws[i]/2;const fx=m.position.x;m.position.y=PY+.11;m.position.z=2.5;if(animate)anim(.4,k=>m.position.x=fx+(tx-fx)*k);else m.position.x=tx;x+=ws[i]+.1})}
+  function rebuildRow(){clearGroup(row);layoutRow(false)}
+  const T=()=>D.v.T;
+  async function spin(Tv){const d0=dist(gen);if(!d0||spinning)return null;spinning=true;const d=temp(d0,Tv);build(d);let r=Math.random(),acc=0,ch=slices[slices.length-1];for(const s of slices){acc+=s.p;if(r<=acc){ch=s;break}}
+   const m=ch.a+ch.th*(.25+.5*Math.random());const cur=wheel.rotation.y;const want=Math.PI/2-m;let delta=((want-cur)%(Math.PI*2)+Math.PI*2)%(Math.PI*2);const end=cur+Math.PI*2*3+delta;
+   await anim(2.2,k=>wheel.rotation.y=cur+(end-cur)*k,ease.out);spinning=false;return ch.t}
+  async function append(t){gen.push(t);const m=tile(t.replace(/^ /,'·')||'.',0xF6C44F,Math.max(.42,t.length*.15+.1),.22,.5);const p0=new THREE.Vector3(cx,PY+.9,cz-Rw);m.position.copy(p0);row.add(m);layoutRow(false);const tgt=m.position.clone();m.position.copy(p0);await anim(.9,k=>{m.position.lerpVectors(p0,tgt,k);m.position.y+=Math.sin(k*Math.PI)*1.2});layoutRow(true)}
+  function readout(){const d0=dist(gen);const d=d0?temp(d0,T()):null;const H=d?-d.reduce((a,[,p])=>a+(p>0?p*Math.log2(p):0),0):0;
+   D.readout({label:'Wrote',big:gen.length?(gen[gen.length-1].trim()||'.'):'…',sub:'…bond prices'+gen.join(''),lines:[d?`next pick: ${H.toFixed(2)} bits ≈ ${Math.pow(2,H).toFixed(1)} real choices`:'sentence finished',`temperature ${T().toFixed(2)}${T()<.03?' (greedy)':''}`],warn:d?'':'press Start over to try again',bar:Math.min(1,H/3),barLabel:'randomness of next pick'});
+   const sb=ccEl.querySelector('[data-act="spin"]');if(sb)sb.disabled=!d}
+  const tagR=()=>{const m=row.children[1];if(m)D.tag(m,[0,.2,0],{now:'followed by the words it chose',next:'how it learned all this'})};
+  return{reset(){D.untag();gen=[];wheel.rotation.y=0;build(temp(P0,1));rebuildRow()},
+   async update(){const d=dist(gen);if(d&&!spinning)build(temp(d,T()));readout();tagR()},
+   async act(a){if(touring)return;if(a==='restart'){gen=[];rebuildRow();wheel.rotation.y=0;build(temp(P0,T()));readout();tagR();return}if(a==='spin'){const t=await spin(T());if(t!=null){await append(t);const d=dist(gen);if(d)build(temp(d,T()));readout()}}},
+   steps:[{cap:'The odds become slices of a wheel: bigger odds, bigger slice',zoom:'×10',cam:[[-1.0,4.6,3.6],[-1.3,.6,-1.0]],go:async()=>{gen=[];rebuildRow();build(temp(P0,1));await wait(.3)}},
+    {cap:'Spin. Big slices win more often, but not always',zoom:'×10',go:async()=>{const t=await spin(1);D._pick=t}},
+    {cap:'The winner is written down after “ prices”',zoom:'×10',cam:[[0,3.4,5.6],[-.3,.6,1.4]],go:async()=>{await append(D._pick||' fell')}},
+    {cap:'Then the whole model runs again to pick the next word',zoom:'×10',cam:[[-.6,4.8,4.8],[-.8,.6,.2]],go:async()=>{build(temp(dist(gen)||P0,1));await wait(.5);const t=await spin(1);if(t!=null)await append(t);tagR()}}]}
+ }});
+
+/* 8 ─ learn */
+STOPS.push({id:'learn',n:8,nav:'training',kick:'Training · how every number was set',title:'Learning',
+ lede:'Every weight you’ve seen started random. Training shows the model real text, measures how surprised it was by the true next word, and nudges every number to be a little less surprised.',
+ idea:[[chip(COL.accent),'loss = −log p(true next word)'],[chip(COL.ink),'gradient: which way each number should move'],[chip(COL.blue)+chip(COL.blue)+chip(COL.blue),'repeat over trillions of tokens']],
+ keys:[['loss','how wrong the prediction was. 0 means certain and right.'],['gradient','for every weight, the direction that lowers the loss.'],['learning rate','how big each nudge is.'],['backpropagation','the method that computes every gradient in one backward pass.']],
+ q:'If the model gave the true word 100% probability, what would the loss be?',opts:['0','1','100'],ans:0,
+ why:'Loss is −log p. If p = 1, then log 1 = 0, so the loss is 0: no surprise, nothing to fix. At 37% the loss is about 1.0; at 1% it is 4.6. The log punishes confident wrong answers hard. Each training step moves the weights a little downhill on this loss, and p(“ fell”) climbs.',
+ exam:'Write the training loss for one next-token prediction, and explain what one training step does.',
+ cards:[['What is the training loss for one next-token prediction?','−log p(true next token). One step computes the gradient of this loss for every weight (backpropagation) and moves each weight a small step against it, scaled by the learning rate.'],['What happens if the learning rate is too high?','Each step overshoots the valley, so the loss bounces, spikes or blows up instead of falling.']],
+ turn:'Set the learning rate, then train. Push it high and watch it overshoot.',fig:'<b>Fig. 8</b> A loss surface for two of the model’s numbers. Real models have billions.',
+ ctl:[{t:'dial',k:'lr',label:'Learning rate',min:-1.5,max:.4,step:.05,def:-.7,fmt:v=>Math.pow(10,v).toFixed(2),ticks:[-1.5,-.5,.4],tickFmt:v=>Math.pow(10,v).toFixed(2)},{t:'switch',k:'mom',label:'Momentum',def:false},{t:'btn',label:'Step',act:'step'},{t:'btn',label:'Train 25',act:'train',dark:true},{t:'btn',label:'Reset',act:'reset'}],
+ build(D){
+  const R=D.root;const Lf=(x,z)=>.4*(x-.3)**2+.6*z*z+.01;const X0=-2.1,Z0=1.9,HS=.22,C=new THREE.Vector3(1.25,PY+.06,-.5),half=2.4;
+  const N=50,geo=gridGeom(N,half),pos=geo.attributes.position.array,col=geo.attributes.color.array;const lo=new THREE.Color(0x3A6FE0),hi=new THREE.Color(COL.gold),tmp=new THREE.Color();
+  for(let k=0;k<pos.length;k+=3){const L=Math.min(6.5,Lf(pos[k],pos[k+2]));pos[k+1]=L*HS;tmp.copy(lo).lerp(hi,Math.pow(L/6.5,.7));col[k]=tmp.r;col[k+1]=tmp.g;col[k+2]=tmp.b}geo.computeVertexNormals();
+  const surf=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide}));surf.position.copy(C);surf.castShadow=true;surf.receiveShadow=true;R.add(surf);
+  const wf=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:COL.ink,wireframe:true,transparent:true,opacity:.07}));wf.position.copy(C);R.add(wf);
+  const sl=lbl('loss = −log p');sl.position.set(C.x,PY+2.9,C.z-2.2);R.add(sl);
+  const ball=new THREE.Mesh(new THREE.SphereGeometry(.14,20,16),toon(COL.accent));ball.castShadow=true;R.add(ball);
+  const MAXT=400,tg=new THREE.BufferGeometry(),tp=new Float32Array(MAXT*3);tg.setAttribute('position',new THREE.BufferAttribute(tp,3));tg.setDrawRange(0,0);const trail=new THREE.Line(tg,new THREE.LineBasicMaterial({color:COL.ink}));R.add(trail);
+  const arrow=new THREE.ArrowHelper(new THREE.Vector3(1,0,0),new THREE.Vector3(),1,COL.ink,.22,.14);arrow.visible=false;R.add(arrow);
+  const card=tile('fell',COL.accent,1.3,.7,.06,{face:'front',bg:0xFFFDF8,sub:'true next word'});card.position.set(-3.25,PY+.32,-1.6);R.add(card);
+  const glass=new THREE.Mesh(new THREE.CylinderGeometry(.34,.34,3,28,1,true),toon(0xCFE6F2,{transparent:true,opacity:.35,side:THREE.DoubleSide}));glass.position.set(-3.25,PY+1.5,-.1);R.add(glass);
+  const gb=box(.8,.08,.8,0xD8D0C0);gb.position.set(-3.25,PY+.04,-.1);R.add(gb);
+  const liq=new THREE.Mesh(new THREE.CylinderGeometry(.29,.29,1,28),toon(COL.accent));liq.position.set(-3.25,PY,-.1);R.add(liq);
+  const pl=lbl('p(“ fell”)');pl.position.set(-3.25,PY+3.25,-.1);R.add(pl);
+  let x,z,vx,vz,steps,tn,blown,busy=false;
+  function push(){if(tn>=MAXT){tp.copyWithin(0,3);tn=MAXT-1}tp[tn*3]=C.x+x;tp[tn*3+1]=C.y+Math.min(6.5,Lf(x,z))*HS+.03;tp[tn*3+2]=C.z+z;tn++;tg.setDrawRange(0,tn);tg.attributes.position.needsUpdate=true}
+  function draw(){const L=Lf(x,z),p=Math.exp(-L);ball.position.set(C.x+x,C.y+Math.min(6.5,L)*HS+.14,C.z+z);const h=Math.max(.02,p*2.9);liq.scale.y=h;liq.position.y=PY+.08+h/2;
+   const g=new THREE.Vector3(-.8*(x-.3),0,-1.2*z);const len=Math.min(1.2,g.length()*.25);if(len>.05){arrow.position.copy(ball.position).add(new THREE.Vector3(0,.15,0));arrow.setDirection(g.normalize());arrow.setLength(len,.2,.12)}}
+  function reset(){x=X0;z=Z0;vx=vz=0;steps=0;tn=0;blown=false;tg.setDrawRange(0,0);push();draw()}
+  function step(lr,mom){vx=mom*vx-lr*.8*(x-.3);vz=mom*vz-lr*1.2*z;x+=vx;z+=vz;steps++;if(Math.abs(x)>half||Math.abs(z)>half||!isFinite(x+z)){x=clamp(x||0,-half,half);z=clamp(z||0,-half,half);blown=true;vx=vz=0}push();draw()}
+  const lr=()=>Math.pow(10,D.v.lr),mom=()=>D.v.mom?.7:0;
+  function readout(){const L=Lf(x,z),p=Math.exp(-L);D.readout({label:'Loss',big:L.toFixed(2),sub:`p(“ fell”) = ${(p*100).toFixed(p<.1?1:0)}%`,lines:[`step ${steps} · learning rate ${lr().toFixed(2)}`],warn:blown?'overshot: learning rate too high':'',bar:p,barLabel:'p(“ fell”)'})}
+  async function train(n,l,m,dt=.07){busy=true;for(let i=0;i<n&&!blown;i++){step(l,m);readout();tagB();await wait(dt)}busy=false}
+  const tagB=()=>D.tag(ball,[0,.1,0],{now:`loss ${Lf(x,z).toFixed(2)} · p = ${(Math.exp(-Lf(x,z))*100).toFixed(0)}%`,next:'fine-tuning'});
+  return{reset(){D.untag();reset();arrow.visible=false},
+   async update(){arrow.visible=true;draw();readout();tagB()},
+   async act(a){if(touring||busy)return;if(a==='reset'){reset();readout();tagB()}else if(a==='step'){step(lr(),mom());readout();tagB()}else if(a==='train'){await train(25,lr(),mom());tagB()}},
+   steps:[{cap:'A training sentence: “…so bond prices fell”. The model must predict “ fell”',zoom:'×10',cam:[[-2.4,2.8,3.4],[-3.1,1.3,-.5]],go:()=>wait(.2)},
+    {cap:'Early in training it gives “ fell” just 1%. Loss = −log 0.01 = 4.6',zoom:'×10',cam:[[.9,4.6,4.6],[1.0,1.2,-.4]],go:()=>anim(.8,k=>ball.scale.setScalar(1+Math.sin(k*Math.PI)*.6))},
+    {cap:'The gradient shows which way is downhill for every weight',zoom:'×10',go:async()=>{arrow.visible=true;draw();await wait(.4)}},
+    {cap:'Step after step, the loss drops and p(“ fell”) climbs',zoom:'×10',cam:[[-.6,4.8,5.8],[-.6,1.0,-.4]],go:()=>train(30,.35,.5,.06)},
+    {cap:'Repeat this over trillions of tokens and every number gets set',zoom:'×10',go:async()=>{tagB();await wait(.3)}}]}
+ }});
+
+/* 9 ─ LoRA */
+STOPS.push({id:'lora',n:9,nav:'LoRA fine-tuning',kick:'Fine-tuning · LoRA adapters',title:'Fine-tuning',
+ lede:'To teach a trained model a new job, you don’t retrain its billions of weights. You freeze them and train a thin add-on beside each big matrix.',
+ idea:[[chip(COL.grey),'freeze the big matrix W'],[chip(COL.teal)+chip(COL.teal),'learn B·A: two thin matrices of rank r'],[chip(COL.blue),'new weights = W + B·A']],
+ keys:[['fine-tuning','further training a trained model on your own data.'],['rank r','how many independent directions the update can use.'],['adapter','the small trainable add-on (B and A).'],['merge','adding B·A into W once training is done.']],
+ q:'To teach the model to write like a trading desk, how much of it has to change?',opts:['Every weight','A thin low-rank add-on does most of it','Only the list of words'],ans:1,
+ why:'Fine-tuning updates turn out to be simple: most of the change lives in a few directions. B·A with rank 8 can express those directions using well under 1% of the numbers. You train far less, store a small file per task, and can swap adapters on one base model. Try rank 1, then 3, then 8, and watch the fit.',
+ exam:'How many trainable numbers does LoRA add to a d×d matrix at rank r, and why does B start at zero?',
+ cards:[['How many trainable numbers does LoRA add to a d×d matrix?','2·d·r instead of d². B starts at zero so B·A = 0 and training begins from exactly the base model.'],['What does merging a LoRA adapter do?','Adds B·A into W once, so the model runs with a single matrix and no extra cost.']],
+ turn:'Turn the dial to change the rank. Train from zero, then merge.',fig:'<b>Fig. 9</b> A 12×12 slice of one weight matrix and its adapter.',
+ ctl:[{t:'dial',k:'r',label:'Rank r',min:1,max:8,step:1,def:4,fmt:v=>String(v),ticks:[1,4,8]},{t:'switch',k:'merge',label:'Merge into W',def:false},{t:'btn',label:'Train from zero',act:'train',dark:true}],
+ build(D){
+  const R=D.root,rng=D.rng,d=12,RK=8,sp=.27,off=(d-1)/2*sp,HK=2.2;const W0C=new THREE.Vector3(1.0,PY,.5);
+  const W0=[...Array(d)].map(()=>[...Array(d)].map(()=>(rng()*2-1)*.05));
+  const unit=()=>{const v=[...Array(d)].map(()=>rng()*2-1);const n=Math.hypot(...v);return v.map(x=>x/n)};
+  const comps=[[1.6,unit(),unit()],[1.0,unit(),unit()],[.6,unit(),unit()]];
+  const Tg=[...Array(d)].map((_,i)=>[...Array(d)].map((_,j)=>comps.reduce((a,[w,u,v])=>a+w*u[i]*v[j],0)+(rng()*2-1)*.02));
+  const Mx=Tg.map(r=>r.slice()),U=[],Sg=[],Vt=[];
+  for(let k=0;k<RK;k++){let v=unit();for(let it=0;it<60;it++){const mv=Mx.map(r=>r.reduce((a,x,j)=>a+x*v[j],0));const w=[...Array(d)].map((_,j)=>Mx.reduce((a,r,i)=>a+r[j]*mv[i],0));const n=Math.hypot(...w)||1;v=w.map(x=>x/n)}const mv=Mx.map(r=>r.reduce((a,x,j)=>a+x*v[j],0));const s=Math.hypot(...mv)||1e-9;U.push(mv.map(x=>x/s));Sg.push(s);Vt.push(v);for(let i=0;i<d;i++)for(let j=0;j<d;j++)Mx[i][j]-=s*U[k][i]*v[j]}
+  const Bf=[...Array(d)].map((_,i)=>[...Array(RK)].map((_,k)=>U[k][i]*Math.sqrt(Sg[k])));const Af=[...Array(RK)].map((_,k)=>[...Array(d)].map((_,j)=>Vt[k][j]*Math.sqrt(Sg[k])));const Ar=[...Array(RK)].map(()=>[...Array(d)].map(()=>(rng()*2-1)*.5));
+  const bx=new THREE.BoxGeometry(.2,1,.2);const mk=n=>{const m=new THREE.InstancedMesh(bx,toon(0xffffff),n);m.castShadow=true;R.add(m);return m};
+  const wm=mk(d*d),dm=mk(d*d),am=mk(RK*d),bm=mk(d*RK);
+  const plate=(w,h,x,y,z,c)=>{const p=box(w,.05,h,c||0xEDE6D8,{recv:true});p.position.set(x,y,z);R.add(p);return p};
+  plate(d*sp+.25,d*sp+.25,W0C.x,PY+.02,W0C.z,0xE2DACB);const dp=plate(d*sp+.25,d*sp+.25,W0C.x,PY+2.35,W0C.z,0xF7F0E2);dp.material.transparent=true;dp.material.opacity=.7;
+  const L=(t,x,y,z,c='lb')=>{const l=lbl(t,c);l.position.set(x,y,z);R.add(l);return l};
+  const lW=L('<b>W</b> · frozen',W0C.x+off+.9,PY+.1,W0C.z+off+.5),lD=L('<b>ΔW = B·A</b>',W0C.x+off+.9,PY+2.45,W0C.z+off+.5);L('<b>A</b> (r × d)',W0C.x,PY+.1,W0C.z-off-2.85);L('<b>B</b> (d × r)',W0C.x-off-2.85,PY+.1,W0C.z+off+.5);
+  const lock=L('FROZEN','tid');lock.position.set(W0C.x,PY+.6,W0C.z+off+.4);
+  const M=new THREE.Matrix4(),col=new THREE.Color();let t=1;
+  const setBar=(im,idx,x,y0,z,v,c)=>{const h=Math.max(.015,Math.abs(v)*HK);M.makeScale(1,h,1);M.setPosition(x,y0+(v>=0?h/2:-h/2),z);im.setMatrixAt(idx,M);im.setColorAt(idx,col.setHex(c))};
+  let mergeK=0;
+  function draw(r){const A=Ar.map((row,k)=>row.map((x,j)=>x*(1-t)+Af[k][j]*t)),B=Bf.map(row=>row.map(x=>x*t));
+   const dW=[...Array(d)].map((_,i)=>[...Array(d)].map((_,j)=>{let a=0;for(let k=0;k<r;k++)a+=B[i][k]*A[k][j];return a}));
+   for(let i=0;i<d;i++)for(let j=0;j<d;j++){const x=W0C.x+j*sp-off,z=W0C.z+i*sp-off,v=W0[i][j]+mergeK*dW[i][j];setBar(wm,i*d+j,x,PY+.05,z,v,mergeK>.5?(v>=0?COL.blue:COL.accent):COL.grey);setBar(dm,i*d+j,x,PY+2.38,z,dW[i][j]*(1-mergeK),Math.abs(dW[i][j])<.02?0xD8D0C0:dW[i][j]>=0?COL.blue:COL.accent)}
+   am.count=r*d;for(let k=0;k<r;k++)for(let j=0;j<d;j++)setBar(am,k*d+j,W0C.x+j*sp-off,PY+.05,W0C.z-off-.7-k*sp,A[k][j]*.35,COL.teal);
+   bm.count=d*r;for(let i=0;i<d;i++)for(let k=0;k<r;k++)setBar(bm,i*r+k,W0C.x-off-.7-k*sp,PY+.05,W0C.z+i*sp-off,B[i][k]*.35,COL.teal);
+   [wm,dm,am,bm].forEach(im=>{im.instanceMatrix.needsUpdate=true;if(im.instanceColor)im.instanceColor.needsUpdate=true});
+   dm.visible=dp.visible=lD.visible=mergeK<.99;lW.element.innerHTML=mergeK>.5?'<b>W + B·A</b> · merged':'<b>W</b> · frozen';lock.element.style.opacity=mergeK>.5?0:1;
+   let num=0,den=0;for(let i=0;i<d;i++)for(let j=0;j<d;j++){num+=(Tg[i][j]-dW[i][j])**2;den+=Tg[i][j]**2}return Math.max(0,1-Math.sqrt(num/den))}
+  function readout(fit){const r=D.v.r,dd=4096,n=2*dd*r;D.readout({label:'Trainable numbers',big:`${(n/(dd*dd)*100).toFixed(2)}%`,sub:`2·d·r = ${n.toLocaleString()} of 16.8M at d = 4,096`,lines:[`fit to the task ${(fit*100).toFixed(0)}% at rank ${r}`,`training progress ${(t*100).toFixed(0)}%`],bar:fit,barLabel:'fit to task'})}
+  let busy=false;
+  return{reset(){D.untag();t=1;mergeK=0;draw(4)},
+   async update(){const m=D.v.merge?1:0,f=mergeK;await anim(.5,k=>{mergeK=f+(m-f)*k;readout(draw(D.v.r))});readout(draw(D.v.r));D.tag(lock,[0,0,0],{now:'its model, plus a thin adapter',next:'learning from preferences'})},
+   async act(a){if(a==='train'&&!busy&&!touring){busy=true;t=0;await anim(2.2,k=>{t=k;readout(draw(D.v.r))});busy=false}},
+   steps:[{cap:'The big weight matrix W: frozen, never touched',zoom:'×10',cam:[[2.6,3.8,5.2],[1.0,.6,.4]],go:async()=>{t=0;draw(4);await wait(.3)}},
+    {cap:'Beside it, two thin matrices. B starts at zero, so nothing changes yet',zoom:'×10',cam:[[-1.2,4.0,5.0],[-.6,.6,-.4]],go:()=>wait(.6)},
+    {cap:'Training fills in A and B',zoom:'×10',go:()=>anim(2.0,k=>{t=k;draw(4)})},
+    {cap:'Their product B·A is a full-size update built from very few numbers',zoom:'×10',cam:[[2.8,5.0,5.6],[1.0,1.6,.4]],go:()=>wait(.8)},
+    {cap:'Merge it into W: one matrix again, no extra cost when running',zoom:'×10',go:()=>anim(1.0,k=>{mergeK=k;draw(4)})}]}
+ }});
+
+/* 10 ─ preferences */
+STOPS.push({id:'align',n:10,nav:'preference tuning',kick:'Preference tuning · RLHF & DPO',title:'Preferences',
+ lede:'Last, people compare pairs of answers. The model shifts probability toward the preferred ones, on a leash that keeps it close to where it started.',
+ idea:[[chip(COL.ok)+chip(COL.rose),'chosen answers ↑, rejected answers ↓'],[chip(COL.grey),'a leash (β) to the original model'],[chip(COL.gold),'too loose → reward hacking']],
+ keys:[['reference model','the model before this step. The leash is tied to it.'],['KL divergence','how far the new model’s odds have moved from the reference.'],['β','leash strength. Small β lets the model drift far.'],['reward hacking','exploiting a flaw in the scorer instead of truly improving.']],
+ q:'The reward scorer has a bug: it loves one weird answer. With a very loose leash (small β), what does the model do?',opts:['Ignores the bug','Piles onto the weird answer','Stops changing'],ans:1,
+ why:'With a loose leash the model chases whatever scores highest, bug included. That is reward hacking. A tighter leash keeps it close to the reference model, so it only moves where the preferences are strong and broad. β trades reward against drift. DPO reaches the same balance directly from the chosen/rejected pairs, with no separate scorer.',
+ exam:'What does β control in preference tuning, and what goes wrong when it is too small?',
+ cards:[['What does β control in preference tuning?','How far the tuned model may drift from the reference (the KL penalty). Too small: it drifts far, loses variety and can exploit flaws in the reward (reward hacking).'],['What does DPO skip compared with RLHF?','Training a separate reward model and running reinforcement learning. It learns straight from chosen/rejected pairs.']],
+ turn:'Turn the dial to loosen or tighten the leash. Flip the switch to plant a bug in the scorer.',fig:'<b>Fig. 10</b> Every possible answer as a landscape. Height = how likely the model is to say it.',
+ ctl:[{t:'dial',k:'beta',label:'Leash β',min:-1.3,max:.7,step:.05,def:-.3,fmt:v=>Math.pow(10,v).toFixed(2),ticks:[-1.3,-.3,.7],tickFmt:v=>Math.pow(10,v).toFixed(2)},{t:'switch',k:'bug',label:'Reward bug',def:false},{t:'btn',label:'Train from start',act:'train',dark:true}],
+ build(D){
+  const R=D.root,N=56,half=3.2,C=new THREE.Vector3(.4,PY+.04,-.4);const g=(x,z,cx,cz,w)=>Math.exp(-((x-cx)**2+(z-cz)**2)/w);
+  const geo=gridGeom(N,half),rg=gridGeom(N,half),P=geo.attributes.position.array,Cl=geo.attributes.color.array,RP=rg.attributes.position.array,cnt=(N+1)*(N+1);
+  const xs=[],zs=[];for(let k=0;k<cnt;k++){xs.push(P[k*3]);zs.push(P[k*3+2])}
+  const ch=[1.6,1.3],rj=[-1.4,1.5],bug=[-2.3,-2.2];
+  const ref=xs.map((x,k)=>g(x,zs[k],0,0,2.6)+.45*g(x,zs[k],1.3,-1.3,1.0));const rs=ref.reduce((a,b)=>a+b,0);for(let k=0;k<cnt;k++)ref[k]/=rs;
+  const HS=1.7/Math.max(...ref);for(let k=0;k<cnt;k++)RP[k*3+1]=ref[k]*HS;rg.attributes.position.needsUpdate=true;
+  const rm=new THREE.Mesh(rg,new THREE.MeshBasicMaterial({color:COL.ink,wireframe:true,transparent:true,opacity:.18}));rm.position.copy(C);R.add(rm);
+  const pm=new THREE.Mesh(geo,new THREE.MeshLambertMaterial({vertexColors:true,side:THREE.DoubleSide,transparent:true,opacity:.92}));pm.position.copy(C);pm.castShadow=true;R.add(pm);
+  const pin=(p,c,t)=>{const gr=new THREE.Group();const cn=new THREE.Mesh(new THREE.ConeGeometry(.15,.5,16),toon(c));cn.rotation.x=Math.PI;cn.position.y=.25;cn.castShadow=true;edges(cn);gr.add(cn);const ring=new THREE.Mesh(new THREE.RingGeometry(.62,.68,48),basic(c,{side:THREE.DoubleSide}));ring.rotation.x=-Math.PI/2;ring.position.y=.01;gr.add(ring);const l=lbl(t,'tid');l.position.y=.75;gr.add(l);gr.position.set(C.x+p[0],C.y,C.z+p[1]);R.add(gr);return gr};
+  const pc=pin(ch,COL.ok,'chosen answers'),pr=pin(rj,COL.rose,'rejected answers'),pb=pin(bug,COL.gold,'scorer bug');
+  const rl=lbl('wireframe = the original model');rl.position.set(C.x-2.6,PY+.1,C.z+3.4);R.add(rl);
+  let t=1;const lo=new THREE.Color(COL.blue),hi=new THREE.Color(COL.ok),tmp=new THREE.Color();
+  const reward=(k,b)=>g(xs[k],zs[k],ch[0],ch[1],1.2)-1.2*g(xs[k],zs[k],rj[0],rj[1],1.2)+(b?3*g(xs[k],zs[k],bug[0],bug[1],.22):0);
+  function draw(beta,b){const pi=new Float64Array(cnt);let su=0;for(let k=0;k<cnt;k++){pi[k]=ref[k]*Math.exp(t*reward(k,b)/beta);su+=pi[k]}
+   let kl=0,er=0,mb=0,mx=0;for(let k=0;k<cnt;k++){pi[k]/=su;if(pi[k]>1e-14)kl+=pi[k]*Math.log(pi[k]/ref[k]);er+=pi[k]*reward(k,false);if(Math.hypot(xs[k]-bug[0],zs[k]-bug[1])<.68)mb+=pi[k];mx=Math.max(mx,pi[k])}
+   for(let k=0;k<cnt;k++){P[k*3+1]=Math.min(4.2,pi[k]*HS);tmp.copy(lo).lerp(hi,Math.min(1,pi[k]/mx));Cl[k*3]=tmp.r;Cl[k*3+1]=tmp.g;Cl[k*3+2]=tmp.b}
+   geo.attributes.position.needsUpdate=true;geo.attributes.color.needsUpdate=true;geo.computeVertexNormals();pb.visible=b;return{kl,er,mb}}
+  const beta=()=>Math.pow(10,D.v.beta);
+  function readout(o){const v=o.mb>.3?'reward hacking: it chases the bug':o.kl>2.5?'drifted far: expect blander, less varied answers':o.kl<.05?'barely moved from the original':'';D.readout({label:'Drift from original (KL)',big:Math.max(0,o.kl).toFixed(2),sub:`true reward ${o.er>=0?'+':''}${o.er.toFixed(2)}${D.v.bug?` · on the bug ${(o.mb*100).toFixed(0)}%`:''}`,lines:[`β = ${beta().toFixed(2)} · training ${(t*100).toFixed(0)}%`],warn:v,bar:Math.min(1,o.er/.9),barLabel:'true reward'})}
+  let busy=false;const tagC=()=>D.tag(pc,[0,.5,0],{now:'nudged toward answers people prefer',next:'you: run it back from stop 1'});
+  return{reset(){D.untag();t=1;draw(.5,false)},
+   async update(){pc.scale.setScalar(1);pr.scale.setScalar(1);readout(draw(beta(),D.v.bug));tagC()},
+   async act(a){if(a==='train'&&!busy&&!touring){busy=true;await anim(2.2,k=>{t=k;readout(draw(beta(),D.v.bug))});busy=false}},
+   steps:[{cap:'Every possible answer, spread out. Height = how likely the model is to say it',zoom:'×10',cam:[[.6,5.4,6.6],[.4,.6,-.4]],go:async()=>{t=0;draw(.5,false);pc.scale.setScalar(.01);pr.scale.setScalar(.01);await wait(.3)}},
+    {cap:'People preferred answers here over answers there',zoom:'×10',go:async()=>{await anim(.6,k=>{pc.scale.setScalar(.01+k);pr.scale.setScalar(.01+k)},ease.back)}},
+    {cap:'Training raises the chosen hill and sinks the rejected one',zoom:'×10',cam:[[2.0,4.6,5.8],[.6,.8,-.2]],go:()=>anim(2.2,k=>{t=k;draw(.5,false)})},
+    {cap:'The wireframe is the original model. β is the leash that keeps it close',zoom:'×10',go:async()=>{await anim(1.4,k=>rm.material.opacity=.18+Math.sin(k*Math.PI)*.5);tagC()}}]}
+ }});
+
+/* ---------- per-stop runtime ---------- */
+let cur=null,touring=false,tourToken=0,tourStep=-1,busy=false;
+const tagEl=document.createElement('div');tagEl.className='tagw';
+const tagObj=new THREE.CSS2DObject(tagEl);
+function makeD(st){const root=new THREE.Group();dio.add(root);const D={root,v:S.ctl[st.id],rng:mulberry(st.n*97+5),
+  tag(obj,off,{now,next}){tagEl.innerHTML=`<i class="tdot"></i><div class="tagc"><div class="th"><i></i>prices</div><div>from: your prompt</div><div>now: ${now}</div><div class="tn">next: ${next} →</div></div>`;if(tagObj.parent!==obj){if(tagObj.parent)tagObj.parent.remove(tagObj);obj.add(tagObj)}tagObj.position.set(...off);tagObj.visible=true},
+  untag(){if(tagObj.parent)tagObj.parent.remove(tagObj);tagEl.remove()},
+  readout:renderReadout};return D}
+function defaults(st){const o={};st.ctl.forEach(c=>{if(c.k)o[c.k]=c.def});return o}
+
+/* ---------- page rendering ---------- */
+function renderPage(){const st=cur.st,done=!!S.done[st.id],pick=S.pred[st.id];
+ const stamp=done?(pick===st.ans?'<span class="stamp ok">You called it</span>':'<span class="stamp no">Not quite</span>'):'';
+ pageEl.innerHTML=`<div class="pg-inner">
+  <div class="kicker"><i class="dot"></i>Stop ${pad(st.n)} / 10 · ${st.kick}</div>
+  <h1>${st.title}</h1>
+  <p class="lede">${st.lede}</p>
+  <div class="box idea"><div class="lab">The idea</div>${st.idea.map(([ic,t])=>`<div class="ir"><span class="ic">${ic}</span><span>${t}</span></div>`).join('')}</div>
+  <div class="lab kwlab">Key words</div>
+  <div class="kw">${st.keys.map(([k,d])=>`<p><b>${k}</b> ${d}</p>`).join('')}</div>
+  <div class="box predict"><div class="lab">Predict</div><p class="q">${st.q}</p>
+   <div class="opts">${st.opts.map((o,i)=>`<button type="button" class="opt${pick===i?' on':''}${done&&i===st.ans?' right':''}" data-i="${i}"${done||touring?' disabled':''}><i></i>${o}</button>`).join('')}</div>${stamp}</div>
+  <div class="runrow">
+   <div><button type="button" class="run"${pick==null||touring?' disabled':''}><b>▶</b>${touring?'Playing…':done?'Run again':'Run it'}</button><div class="guess">${pick==null?'Pick an answer first.':`Your guess:<br><i>${st.opts[pick]}</i>`}</div></div>
+   <button type="button" class="flap${done?'':' locked'}"${done?'':' disabled'}><span class="lab">Why?</span><b>${done?'Lift the flap':'Run it first'}</b><small>${done?'to see the reasoning':'The answer unlocks after the experiment.'}</small></button>
+  </div>
+  <div class="exam"><div class="exh"><span class="lab">Exam corner</span><span class="marks">[2 marks]</span></div><p>${st.exam}</p><small>${done?'✓ In your recall deck. Answer it there, from memory.':'Run the experiment to add this to your recall deck.'}</small></div>
+  <div class="pfoot"><span>p. ${pad(st.n)}</span><span class="pnav"><button type="button" class="pprev"${st.n===1?' disabled':''}>‹ Previous stop</button><button type="button" class="pnext"${st.n===10?' disabled':''}>Next stop ›</button></span></div>
+ </div>
+ <div class="why" hidden><div class="lab">Why?</div><p>${st.why}</p><div class="whyans">Answer: <b>${st.opts[st.ans]}</b>${pick!=null?` · you said <i>${st.opts[pick]}</i>`:''}</div><button type="button" class="fold">Fold back</button></div>`}
+pageEl.addEventListener('click',e=>{const b=e.target.closest('button');if(!b||!cur)return;const st=cur.st;
+ if(b.classList.contains('opt')){S.pred[st.id]=+b.dataset.i;save();renderPage()}
+ else if(b.classList.contains('run'))playTour(0);
+ else if(b.classList.contains('flap'))pageEl.querySelector('.why').hidden=false;
+ else if(b.classList.contains('fold'))pageEl.querySelector('.why').hidden=true;
+ else if(b.classList.contains('pprev'))goStop(S.stop-1,-1);
+ else if(b.classList.contains('pnext'))goStop(S.stop+1,1)});
+
+/* ---------- controls card ---------- */
+function renderControls(){const st=cur.st,v=S.ctl[st.id];
+ const dials=st.ctl.filter(c=>c.t==='dial'),sws=st.ctl.filter(c=>c.t==='switch'),btns=st.ctl.filter(c=>c.t==='btn');
+ ccEl.innerHTML=`<div class="cc-row">${dials.map(c=>`<div class="dial" data-k="${c.k}"><div class="dface"></div><div class="dlab">${c.label}</div><div class="dval"></div></div>`).join('')}
+  <div class="side">${sws.map(c=>`<div class="sw"><div class="swr">OFF<button type="button" class="lever" data-k="${c.k}" aria-pressed="${!!v[c.k]}" aria-label="${c.label}"></button>ON</div><div class="dlab">${c.label}</div></div>`).join('')}
+  ${btns.length?`<div class="btns">${btns.map(b=>`<button type="button" class="mini${b.dark?' dark':''}" data-act="${b.act}">${b.label}</button>`).join('')}</div>`:''}</div></div>
+  <div class="turn"><span class="lab">Your turn</span>${st.turn}</div><div class="fig">${st.fig}</div>`;
+ dials.forEach(c=>buildDial(ccEl.querySelector(`.dial[data-k="${c.k}"]`),c));
+ ccEl.querySelectorAll('.lever').forEach(b=>b.addEventListener('click',()=>{if(touring)return;const k=b.dataset.k;v[k]=!v[k];b.setAttribute('aria-pressed',v[k]);save();cur.rt.update()}));
+ ccEl.querySelectorAll('[data-act]').forEach(b=>b.addEventListener('click',()=>cur.rt.act&&cur.rt.act(b.dataset.act)))}
+function buildDial(el,c){const v=S.ctl[cur.st.id];const face=el.querySelector('.dface'),out=el.querySelector('.dval');const A0=-135,A1=135;
+ const disc=!!c.opts;const n=disc?c.opts.length:0;
+ const toAng=val=>disc?A0+(A1-A0)*(n>1?c.opts.indexOf(val)/(n-1):0):A0+(A1-A0)*(val-c.min)/(c.max-c.min);
+ const fromAng=a=>{const f=(clamp(a,A0,A1)-A0)/(A1-A0);if(disc)return c.opts[Math.round(f*(n-1))];const raw=c.min+f*(c.max-c.min);return +(Math.round(raw/c.step)*c.step).toFixed(4)};
+ const fmt=val=>disc?val:c.fmt(val);
+ const knob=document.createElement('div');knob.className='knob';knob.tabIndex=0;knob.setAttribute('role','slider');knob.setAttribute('aria-label',c.label);knob.innerHTML='<i class="notch"></i>';face.appendChild(knob);
+ const cx=56,cy=46,rT=40,rL=51;
+ const marks=disc?c.opts.map((o,i)=>({val:o,a:toAng(o),txt:n<=4?o:''})):(c.ticks||[]).map(t=>({val:t,a:toAng(t),txt:c.tickFmt?c.tickFmt(t):String(t)}));
+ marks.forEach(m=>{const r=m.a*Math.PI/180;const tk=document.createElement('i');tk.className='tick';tk.style.left=(cx+Math.sin(r)*rT)+'px';tk.style.top=(cy-Math.cos(r)*rT)+'px';tk.style.transform=`rotate(${m.a}deg)`;face.appendChild(tk);
+  if(m.txt!==''){const b=document.createElement('button');b.type='button';b.className='tl';b.textContent=m.txt;b.style.left=(cx+Math.sin(r)*rL+(Math.abs(m.a)>100?Math.sign(m.a)*6:0))+'px';b.style.top=(cy-Math.cos(r)*rL+(Math.abs(m.a)>100?6:0))+'px';b.addEventListener('click',()=>set(m.val,true));face.appendChild(b);m.el=b}});
+ function paint(){knob.style.transform=`rotate(${toAng(v[c.k])}deg)`;out.textContent=fmt(v[c.k]);knob.setAttribute('aria-valuetext',fmt(v[c.k]));marks.forEach(m=>m.el&&m.el.classList.toggle('on',m.val===v[c.k]))}
+ let pend=null;function set(val,commit){if(touring)return;if(val===v[c.k]&&!commit)return;v[c.k]=val;paint();save();clearTimeout(pend);pend=setTimeout(()=>cur.rt.update(),disc?0:90)}
+ knob.addEventListener('pointerdown',e=>{if(touring)return;knob.setPointerCapture(e.pointerId);knob.style.cursor='grabbing';const mv=ev=>{const r=knob.getBoundingClientRect();const a=Math.atan2(ev.clientX-(r.left+r.width/2),-(ev.clientY-(r.top+r.height/2)))*180/Math.PI;set(fromAng(a))};mv(e);const up=()=>{knob.removeEventListener('pointermove',mv);knob.removeEventListener('pointerup',up);knob.style.cursor=''};knob.addEventListener('pointermove',mv);knob.addEventListener('pointerup',up)});
+ knob.addEventListener('keydown',e=>{const d=(e.key==='ArrowRight'||e.key==='ArrowUp')?1:(e.key==='ArrowLeft'||e.key==='ArrowDown')?-1:0;if(!d)return;e.preventDefault();if(disc){const i=clamp(c.opts.indexOf(v[c.k])+d,0,n-1);set(c.opts[i])}else set(+clamp(v[c.k]+d*c.step,c.min,c.max).toFixed(4))});
+ paint()}
+
+/* ---------- readout card ---------- */
+function renderReadout(o){const big=String(o.big);const fs=big.length>11?20:big.length>8?26:34;
+ roEl.innerHTML=`<div class="ro-l">${o.label}</div><div class="ro-big" style="font-size:${fs}px">${big}</div><div class="ro-sub">${o.sub||''}</div><div class="ro-lines">${(o.lines||[]).join('<br>')}</div>${o.warn?`<div class="ro-warn">${o.warn}</div>`:''}<div class="ro-bar"><span>${o.barLabel||''}</span><div><i style="width:${clamp(o.bar||0,0,1)*100}%"></i></div></div>`}
+
+/* ---------- HUD ---------- */
+function setCap(text,n=0,i=-1){$('#cap').textContent=text;$('#dots').innerHTML=[...Array(n)].map((_,k)=>`<i class="${k===i?'on':''}"></i>`).join('')}
+function idleCap(){const st=cur.st;setCap(S.done[st.id]?`Stop ${st.n}: ${st.title}. Play with the controls, or replay the experiment.`:`Stop ${st.n}: ${st.title}. Read the page, make your prediction, then Run it.`);$('#zoom').textContent='×1'}
+function renderContents(){$('#contents').innerHTML=STOPS.map((s,i)=>`<button type="button" data-i="${i}" aria-current="${i===S.stop}"><span class="n">${pad(s.n)}</span><span>${s.title}</span><span class="ck">${S.done[s.id]?(S.pred[s.id]===s.ans?'✓':'✓·'):''}</span></button>`).join('')}
+$('#badge').addEventListener('click',()=>{const c=$('#contents');c.hidden=!c.hidden;$('#badge').setAttribute('aria-expanded',!c.hidden);if(!c.hidden)renderContents()});
+$('#contents').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;$('#contents').hidden=true;const i=+b.dataset.i;if(i!==S.stop)goStop(i,i>S.stop?1:-1)});
+$('#capPrev').addEventListener('click',()=>{if(touring)playTour(Math.max(0,tourStep-1));else if(S.stop>0)goStop(S.stop-1,-1)});
+$('#capNext').addEventListener('click',()=>{if(touring){if(tourStep<cur.rt.steps.length-1)playTour(tourStep+1);else finishTour()}else if(S.stop<9)goStop(S.stop+1,1)});
+$('#capReplay').addEventListener('click',()=>{if(S.pred[cur.st.id]==null){setCap('Make your prediction on the page first, then the experiment runs.');return}playTour(0)});
+addEventListener('keydown',e=>{if(e.key==='Escape'){if(!$('#review').hidden)closeReview();else if(touring)cancelTour(true)}});
+
+/* ---------- tours ---------- */
+async function playTour(from){if(!cur||busy)return;const my=++tourToken;touring=true;controls.enabled=false;renderPage();
+ const rt=cur.rt,steps=rt.steps;tweens=[];camBusy=false;
+ rt.reset();INSTANT=true;for(let i=0;i<from;i++)await steps[i].go();INSTANT=false;
+ for(let i=from;i<steps.length;i++){if(my!==tourToken)return;tourStep=i;const s=steps[i];setCap(s.cap,steps.length,i);$('#zoom').textContent=s.zoom||'×10';
+  const cam=s.cam?camTo(...rel(s.cam[0],s.cam[1],s.zoom),1.3):Promise.resolve();await Promise.all([cam.then(()=>s.go()),wait(1.3)]);if(my!==tourToken)return;await wait(s.hold??1.7);if(my!==tourToken)return}
+ finishTour()}
+async function finishTour(){const my=++tourToken;touring=false;tweens=[];camBusy=false;const st=cur.st;const first=!S.done[st.id];S.done[st.id]=true;
+ if(first)st.cards.forEach((c,k)=>{const key=st.id+'-'+k;if(!S.cards[key])S.cards[key]={box:0,due:Date.now()}});save();
+ const right=S.pred[st.id]===st.ans;renderPage();updateDue();
+ setCap(right?`You called it: ${st.opts[st.ans]}. Lift the flap to see why.`:`Not quite. The answer was ${st.opts[st.ans]}. Lift the flap to see why.`);$('#zoom').textContent='×1';
+ await camTo(...homePose(),1.3);if(my!==tourToken)return;controls.enabled=true;cur.rt.update()}
+function cancelTour(restore){if(!touring)return;tourToken++;touring=false;tweens=[];camBusy=false;controls.enabled=true;renderPage();if(restore){cur.rt.update();camTo(...homePose(),.9);idleCap()}}
+
+/* ---------- stop switching ---------- */
+const flipMat=new THREE.MeshBasicMaterial({color:0xF7F3EA,side:THREE.DoubleSide});
+async function flipPage(dir,mid){const piv=new THREE.Group();piv.position.set(0,TOP+.02,0);scene.add(piv);const pg=new THREE.Mesh(new THREE.PlaneGeometry(10,13),flipMat);pg.rotation.x=-Math.PI/2;pg.position.x=5;pg.castShadow=true;piv.add(pg);
+ let swapped=false;const a0=dir>0?0:Math.PI,a1=dir>0?Math.PI:0;await anim(.85,k=>{piv.rotation.z=a0+(a1-a0)*k;piv.position.y=TOP+.02+Math.sin(k*Math.PI)*.4;if(!swapped&&k>=.5){swapped=true;mid()}});if(!swapped)mid();scene.remove(piv);pg.geometry.dispose()}
+function mount(i){if(cur){tagEl.remove();if(tagObj.parent)tagObj.parent.remove(tagObj);dio.remove(cur.D.root);disposeTree(cur.D.root)}
+ S.stop=i;const st=STOPS[i];S.ctl[st.id]=Object.assign(defaults(st),S.ctl[st.id]||{});save();
+ const D=makeD(st);const rt=st.build(D);cur={st,D,rt};renderPage();renderControls();rt.reset();rt.update();idleCap();
+ $('#badgeSub').textContent=`stop ${st.n} of 10 · ${st.nav}`;try{history.replaceState(null,'','#stop-'+st.n)}catch(e){}}
+async function goStop(i,dir=1,first=false){i=clamp(i,0,9);if(busy||(!first&&i===S.stop))return;busy=true;cancelTour(false);$('#contents').hidden=true;
+ if(!first){await anim(.3,k=>dio.scale.y=Math.max(.001,1-k));camTo(...homePose(),.8);await flipPage(dir,()=>mount(i))}else mount(i);
+ await anim(.75,k=>dio.scale.y=Math.max(.001,k),ease.back);busy=false}
+
+/* ---------- recall deck ---------- */
+const IV=[0,1,3,7,16,35,80],DAY=864e5;
+function allCards(){const out=[];STOPS.forEach(st=>st.cards.forEach((c,k)=>{const key=st.id+'-'+k;if(S.cards[key])out.push({key,st,q:c[0],a:c[1],s:S.cards[key]})}));return out}
+function updateDue(){const n=allCards().filter(c=>c.s.due<=Date.now()).length;$('#dueN').textContent=n;drawStack(n)}
+let rvShown=false,rvAhead=false;
+function fmtIn(ms){if(ms<36e5)return Math.max(1,Math.round(ms/6e4))+' min';if(ms<DAY)return Math.round(ms/36e5)+' h';return Math.round(ms/DAY)+' d'}
+function renderReview(){const all=allCards(),now=Date.now();const due=all.filter(c=>c.s.due<=now||rvAhead).sort((a,b)=>a.s.due-b.s.due);const el=$('#rv');
+ const top=`<div class="rv-top"><span class="lab">Recall deck · ${all.length} cards</span><button class="rv-x" type="button" aria-label="Close">×</button></div>`;
+ if(!all.length)el.innerHTML=top+`<p class="rv-q">Your deck is empty.</p><p>Run the experiment at any stop. Its exam questions land here and come back on a spaced schedule.</p>`;
+ else if(!due.length){const nx=Math.min(...all.map(c=>c.s.due));el.innerHTML=top+`<p class="rv-q">Nothing due right now.</p><p>The next card returns in ${fmtIn(nx-now)}. Recall works best when it is slightly hard, so the gaps are on purpose.</p><div class="rv-g"><button class="mini" type="button" id="rvAhead">Study ahead anyway</button></div>`}
+ else{const c=due[0],b=c.s.box,nx=x=>fmtIn(IV[Math.min(IV.length-1,x)]*DAY);
+  el.innerHTML=top+`<div class="rv-boxes">Stop ${pad(c.st.n)} · ${c.st.title} · box ${b} · ${due.length} in queue</div><p class="rv-q">${c.q}</p>`+(rvShown?`<p class="rv-a">${c.a}</p><div class="rv-g"><button class="mini again" data-g="0" type="button">Again<small>1 min</small></button><button class="mini good" data-g="1" type="button">Good<small>${nx(b+1)}</small></button><button class="mini" data-g="2" type="button">Easy<small>${nx(b+2)}</small></button></div>`:`<p style="color:var(--muted);font-size:13px;margin:0">Say the answer out loud or write it down before you look.</p><div class="rv-g"><button class="mini dark" type="button" id="rvShow">Show answer</button></div>`)}
+ el.querySelector('.rv-x').onclick=closeReview;const sa=el.querySelector('#rvShow');if(sa)sa.onclick=()=>{rvShown=true;renderReview()};const ah=el.querySelector('#rvAhead');if(ah)ah.onclick=()=>{rvAhead=true;renderReview()};
+ el.querySelectorAll('[data-g]').forEach(bt=>bt.onclick=()=>{const c=due[0],g=+bt.dataset.g,s=S.cards[c.key];if(g===0){s.box=1;s.due=Date.now()+6e4}else{s.box=Math.min(IV.length-1,s.box+g);s.due=Date.now()+IV[s.box]*DAY}save();rvShown=false;updateDue();renderReview()})}
+function openReview(){rvShown=false;rvAhead=false;$('#review').hidden=false;renderReview()}
+function closeReview(){$('#review').hidden=true}
+$('#recallBtn').addEventListener('click',openReview);
+$('#review').addEventListener('click',e=>{if(e.target.id==='review')closeReview()});
+
+/* desk clicks (recall stack) */
+const ray=new THREE.Raycaster(),ndc=new THREE.Vector2();let downAt=null;
+stage.addEventListener('pointerdown',e=>{downAt=[e.clientX,e.clientY]},true);
+stage.addEventListener('pointerup',e=>{if(!downAt||Math.hypot(e.clientX-downAt[0],e.clientY-downAt[1])>6)return;if(e.target.closest('.pg,.cc,.ro,.hud'))return;const r=stage.getBoundingClientRect();ndc.set((e.clientX-r.left)/r.width*2-1,-(e.clientY-r.top)/r.height*2+1);ray.setFromCamera(ndc,camera);if(ray.intersectObjects(stack.children,false).length)openReview()});
+
+/* ---------- loop ---------- */
+const clock=new THREE.Clock();
+function fixTag(){if(!tagEl.isConnected)return;const c=tagEl.querySelector('.tagc');if(!c)return;const sr=stage.getBoundingClientRect(),tr=tagEl.getBoundingClientRect();const need=tr.left+14+c.offsetWidth>sr.right-12;c.style.left=need?'auto':'14px';c.style.right=need?'14px':'auto';const up=tr.top-12-c.offsetHeight<sr.top+60;c.style.bottom=up?'auto':'12px';c.style.top=up?'12px':'auto'}
+function loop(){requestAnimationFrame(loop);const dt=Math.min(.05,clock.getDelta());tickTweens(dt);if(controls.enabled&&!camBusy)controls.update();renderer.render(scene,camera);if(wide)css3.render(scene,camera);css2.render(scene,camera);fixTag()}
+
+/* ---------- boot ---------- */
+try{await Promise.race([Promise.all([document.fonts.load('600 40px Poppins'),document.fonts.load('500 40px "DM Mono"'),document.fonts.load('italic 500 40px Poppins')]),new Promise(r=>setTimeout(r,2500))])}catch(e){}
+addEventListener('resize',resize);resize();
+const hm=(location.hash||'').match(/^#stop-(\d+)$/);const start=hm?clamp(+hm[1]-1,0,9):clamp(S.stop,0,9);
+updateDue();loop();goStop(start,1,true);
+setInterval(updateDue,60000);
+})();
+</script>
+
+</body>
+</html>
